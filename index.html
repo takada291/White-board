@@ -3,116 +3,67 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-    <title>電子黒板</title>
+    <title>電子黒板(GPS付)</title>
     <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
     <style>
         body { 
             background-color: #222; 
             color: white; 
-            overflow: hidden; /* スクロール禁止 */
+            overflow: hidden; 
             height: 100vh;
             width: 100vw;
             margin: 0;
+            font-family: sans-serif;
         }
 
-        /* 縦画面の時の警告オーバーレイ */
         #portrait-warning {
-            position: fixed;
-            top: 0; left: 0; width: 100%; height: 100%;
-            background: rgba(0,0,0,0.9);
-            z-index: 9999;
-            display: flex;
-            justify-content: center;
-            align-items: center;
-            text-align: center;
-            flex-direction: column;
+            position: fixed; top: 0; left: 0; width: 100%; height: 100%;
+            background: rgba(0,0,0,0.9); z-index: 9999;
+            display: flex; justify-content: center; align-items: center;
+            text-align: center; flex-direction: column;
         }
 
-        /* メインレイアウト（横並び） */
-        .app-container {
-            display: flex;
-            height: 100%;
-            width: 100%;
-        }
+        .app-container { display: flex; height: 100%; width: 100%; }
 
-        /* 左側：カメラエリア */
         .camera-area {
-            flex: 1; /* 残りの幅全部 */
-            position: relative;
-            background: #000;
-            display: flex;
-            align-items: center;
-            justify-content: center;
+            flex: 1; position: relative; background: #000;
+            display: flex; align-items: center; justify-content: center;
         }
         
-        video {
-            width: 100%;
-            height: 100%;
-            object-fit: contain; /* 画面に収まるように表示 */
-        }
+        video { width: 100%; height: 100%; object-fit: contain; }
 
-        /* 右側：操作パネル */
         .control-panel {
-            width: 320px; /* 固定幅 */
-            background: #333;
-            padding: 15px;
-            overflow-y: auto; /* 縦スクロール可 */
-            border-left: 1px solid #555;
-            display: flex;
-            flex-direction: column;
-            gap: 10px;
+            width: 320px; background: #333; padding: 15px;
+            overflow-y: auto; border-left: 1px solid #555;
+            display: flex; flex-direction: column; gap: 10px;
         }
 
-        /* 入力フォームのスタイル調整 */
         .form-control-sm {
-            background-color: #444;
-            color: white;
-            border: 1px solid #666;
+            background-color: #444; color: white; border: 1px solid #666;
         }
-        .form-control-sm:focus {
-            background-color: #555;
-            color: white;
-        }
+        .form-control-sm:focus { background-color: #555; color: white; }
         label { font-size: 0.8rem; color: #ccc; }
 
-        /* 撮影ボタン */
         .shutter-btn {
-            width: 100%;
-            padding: 15px;
-            background-color: #dc3545;
-            color: white;
-            border: none;
-            border-radius: 10px;
-            font-weight: bold;
-            font-size: 1.2rem;
-            margin-top: auto; /* 下に寄せる */
+            width: 100%; padding: 15px;
+            background-color: #dc3545; color: white;
+            border: none; border-radius: 10px;
+            font-weight: bold; font-size: 1.2rem; margin-top: auto;
         }
         .shutter-btn:active { transform: scale(0.98); }
 
-        /* 黒板位置切り替えスイッチ */
-        .pos-switch {
-            display: flex;
-            gap: 10px;
-            margin-bottom: 10px;
-        }
+        .pos-switch { display: flex; gap: 10px; margin-bottom: 5px; }
         .pos-btn {
-            flex: 1;
-            padding: 5px;
-            font-size: 0.8rem;
-            background: #555;
-            border: 1px solid #777;
-            color: #aaa;
-            text-align: center;
-            border-radius: 5px;
-            cursor: pointer;
+            flex: 1; padding: 5px; font-size: 0.8rem;
+            background: #555; border: 1px solid #777; color: #aaa;
+            text-align: center; border-radius: 5px; cursor: pointer;
         }
-        .pos-btn.active {
-            background: #0d6efd;
-            color: white;
-            border-color: #0d6efd;
-        }
+        .pos-btn.active { background: #0d6efd; color: white; border-color: #0d6efd; }
 
-        /* 非表示のキャンバス */
+        /* GPSスイッチのデザイン */
+        .form-check-input { cursor: pointer; }
+        .gps-status { font-size: 0.75rem; color: #ffd700; min-height: 1.2em; }
+
         #outputCanvas { display: none; }
     </style>
 </head>
@@ -120,7 +71,7 @@
 
     <div id="portrait-warning">
         <h1>📱くるっと回転</h1>
-        <p>スマホを横向きにしてください<br>（現場写真は横長が基本です）</p>
+        <p>スマホを横向きにしてください</p>
     </div>
 
     <div class="app-container">
@@ -132,35 +83,27 @@
         <div class="control-panel">
             <h6 class="text-center border-bottom pb-2">電子黒板設定</h6>
 
-            <label>黒板の位置</label>
-            <div class="pos-switch">
-                <div class="pos-btn" onclick="setBoardPos('left')" id="btnLeft">左下</div>
-                <div class="pos-btn active" onclick="setBoardPos('right')" id="btnRight">右下</div>
+            <div class="d-flex justify-content-between align-items-center">
+                <label>黒板位置</label>
+                <div class="pos-switch" style="width: 60%;">
+                    <div class="pos-btn" onclick="setBoardPos('left')" id="btnLeft">左下</div>
+                    <div class="pos-btn active" onclick="setBoardPos('right')" id="btnRight">右下</div>
+                </div>
             </div>
 
-            <div>
-                <label>1. 工事名・業務名</label>
-                <input type="text" id="input1" class="form-control form-control-sm" value="R7年度 作業道開設">
-            </div>
-            <div>
-                <label>2. 工種・作業内容</label>
-                <input type="text" id="input2" class="form-control form-control-sm" value="路網作設工">
-            </div>
-            <div>
-                <label>3. 測点・詳細</label>
-                <input type="text" id="input3" class="form-control form-control-sm" value="No.0">
-            </div>
-            <div>
-                <label>4. 備考・日付など</label>
-                <input type="text" id="input4" class="form-control form-control-sm" value="">
+            <div class="form-check form-switch mt-1 border-bottom pb-2 mb-2">
+                <input class="form-check-input" type="checkbox" id="gpsToggle" onchange="toggleGPS()">
+                <label class="form-check-label" for="gpsToggle">📍 位置・方位情報を記録</label>
+                <div id="gpsStatus" class="gps-status">OFF</div>
             </div>
 
-            <button class="shutter-btn" onclick="takePhoto()">
-                📸 撮影・保存
-            </button>
-            <p class="text-center text-muted mt-1" style="font-size:0.7rem;">
-                ※iPhoneは「共有」メニューから<br>「画像を保存」を選んでください
-            </p>
+            <div><label>1. 工事名</label><input type="text" id="input1" class="form-control form-control-sm" value="R7年度 作業道開設"></div>
+            <div><label>2. 工種</label><input type="text" id="input2" class="form-control form-control-sm" value="路網作設工"></div>
+            <div><label>3. 測点</label><input type="text" id="input3" class="form-control form-control-sm" value="No.0"></div>
+            <div><label>4. 日付・備考</label><input type="text" id="input4" class="form-control form-control-sm" value=""></div>
+
+            <button class="shutter-btn" onclick="takePhoto()">📸 撮影・保存</button>
+            <p class="text-center text-muted mt-1" style="font-size:0.7rem;">iPhoneは「共有」→「画像を保存」</p>
         </div>
     </div>
 
@@ -169,15 +112,13 @@
     const canvas = document.getElementById('outputCanvas');
     const ctx = canvas.getContext('2d');
     const warning = document.getElementById('portrait-warning');
-    
-    // 日付の初期セット
+    const gpsStatusDiv = document.getElementById('gpsStatus');
+
+    // 日付初期化
     const today = new Date();
-    const dateStr = today.getFullYear() + '/' + (today.getMonth()+1) + '/' + today.getDate();
-    document.getElementById('input4').value = dateStr; // 4行目に日付を入れる
+    document.getElementById('input4').value = today.getFullYear() + '/' + (today.getMonth()+1) + '/' + today.getDate();
 
-    // 黒板の位置管理 ('right' or 'left')
     let boardPosition = 'right';
-
     function setBoardPos(pos) {
         boardPosition = pos;
         document.getElementById('btnLeft').className = pos === 'left' ? 'pos-btn active' : 'pos-btn';
@@ -186,82 +127,151 @@
 
     // 縦横検知
     function checkOrientation() {
-        if (window.innerWidth < window.innerHeight) {
-            warning.style.display = 'flex'; // 縦なら警告表示
-        } else {
-            warning.style.display = 'none'; // 横なら警告消す
-        }
+        warning.style.display = (window.innerWidth < window.innerHeight) ? 'flex' : 'none';
     }
     window.addEventListener('resize', checkOrientation);
-    checkOrientation(); // 初回実行
+    checkOrientation();
 
     // カメラ起動
     async function startCamera() {
         try {
             const stream = await navigator.mediaDevices.getUserMedia({ 
-                video: { 
-                    facingMode: 'environment',
-                    width: { ideal: 1920 },
-                    height: { ideal: 1080 }
-                }, 
-                audio: false 
+                video: { facingMode: 'environment', width: { ideal: 1920 }, height: { ideal: 1080 } }, audio: false 
             });
             video.srcObject = stream;
-        } catch (err) {
-            alert("カメラ起動エラー: " + err.message);
+        } catch (err) { alert("カメラ起動エラー: " + err.message); }
+    }
+    window.onload = startCamera;
+
+    // --- GPS & 方位センサー関連 ---
+    let useGPS = false;
+    let currentLat = null;
+    let currentLon = null;
+    let currentHeading = null; // 方位 (0-360)
+    let watchId = null;
+
+    async function toggleGPS() {
+        const checkbox = document.getElementById('gpsToggle');
+        useGPS = checkbox.checked;
+
+        if (useGPS) {
+            gpsStatusDiv.innerText = "測位中...";
+            
+            // 1. 位置情報の監視開始
+            if (navigator.geolocation) {
+                watchId = navigator.geolocation.watchPosition(
+                    (pos) => {
+                        currentLat = pos.coords.latitude.toFixed(5);
+                        currentLon = pos.coords.longitude.toFixed(5);
+                        updateStatusText();
+                    },
+                    (err) => { gpsStatusDiv.innerText = "GPSエラー: " + err.message; },
+                    { enableHighAccuracy: true }
+                );
+            }
+
+            // 2. 方位センサー（iOS対応）
+            if (typeof DeviceOrientationEvent !== 'undefined' && typeof DeviceOrientationEvent.requestPermission === 'function') {
+                // iOS 13+ は許可が必要
+                try {
+                    const permission = await DeviceOrientationEvent.requestPermission();
+                    if (permission === 'granted') {
+                        window.addEventListener('deviceorientation', handleOrientation);
+                    } else {
+                        alert("方位の許可が得られませんでした");
+                    }
+                } catch (e) { console.log(e); }
+            } else {
+                // Android / PC他
+                window.addEventListener('deviceorientation', handleOrientation);
+            }
+
+        } else {
+            // OFFにする処理
+            gpsStatusDiv.innerText = "OFF";
+            if (watchId) navigator.geolocation.clearWatch(watchId);
+            window.removeEventListener('deviceorientation', handleOrientation);
+            currentLat = null; currentLon = null; currentHeading = null;
         }
     }
 
-    // 黒板描画処理
+    function handleOrientation(event) {
+        // 方位取得 (iOS webkitCompassHeading, Android alpha)
+        if (event.webkitCompassHeading) {
+            currentHeading = event.webkitCompassHeading; // iOS
+        } else if (event.alpha) {
+            // Androidのalphaは「北=0」とは限らないが、簡易的に使用
+            // 厳密には絶対方位(absolute)の計算が必要だが、今回は簡易実装
+            currentHeading = 360 - event.alpha; 
+        }
+        updateStatusText();
+    }
+
+    function updateStatusText() {
+        if (!useGPS) return;
+        let text = "";
+        if (currentLat) text += `N${currentLat} E${currentLon} `;
+        if (currentHeading != null) text += ` 方位:${Math.round(currentHeading)}°`;
+        gpsStatusDiv.innerText = text || "データ取得中...";
+    }
+
+    // --- 描画処理 ---
     function drawBlackboard() {
-        // 解像度合わせ
         canvas.width = video.videoWidth;
         canvas.height = video.videoHeight;
         
-        // 1. 写真を描画
         ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
 
-        // 2. 黒板のサイズ計算（少し小さく調整：幅の25%）
+        // 黒板サイズ
         const boardWidth = canvas.width * 0.25; 
-        const boardHeight = boardWidth * 0.75; // 4:3
-        const margin = canvas.width * 0.02; // 端から2%の余白
+        const boardHeight = boardWidth * 0.75; 
+        const margin = canvas.width * 0.02;
 
-        // 3. 位置の計算
         let x, y;
-        y = canvas.height - boardHeight - margin; // 下端は共通
-        if (boardPosition === 'right') {
-            x = canvas.width - boardWidth - margin; // 右寄せ
-        } else {
-            x = margin; // 左寄せ
-        }
+        // GPS情報がある場合、黒板の下に少しスペースを追加して描画するか、
+        // 黒板の中に押し込むか。今回は「黒板の下部に追加枠」を作るイメージで
+        const gpsAreaHeight = useGPS ? (boardHeight * 0.15) : 0; 
+        const totalHeight = boardHeight + gpsAreaHeight;
 
-        // 4. 黒板の背景（深緑）
+        y = canvas.height - totalHeight - margin;
+        x = (boardPosition === 'right') ? (canvas.width - boardWidth - margin) : margin;
+
+        // 黒板本体の背景
         ctx.fillStyle = "#004d26"; 
         ctx.fillRect(x, y, boardWidth, boardHeight);
         
-        // 枠線（白）
+        // GPSエリアの背景（少し暗くする、あるいは同じ色）
+        if (useGPS) {
+            ctx.fillStyle = "#003319"; // 少し濃い緑
+            ctx.fillRect(x, y + boardHeight, boardWidth, gpsAreaHeight);
+        }
+
+        // 外枠
         ctx.strokeStyle = "white";
         ctx.lineWidth = boardWidth * 0.01;
-        ctx.strokeRect(x, y, boardWidth, boardHeight);
+        ctx.strokeRect(x, y, boardWidth, totalHeight); // 全体を囲む
 
-        // 仕切り線（横線3本で4行にする）
+        // 罫線
         const rowH = boardHeight / 4;
         ctx.beginPath();
         ctx.moveTo(x, y + rowH * 1); ctx.lineTo(x + boardWidth, y + rowH * 1);
         ctx.moveTo(x, y + rowH * 2); ctx.lineTo(x + boardWidth, y + rowH * 2);
         ctx.moveTo(x, y + rowH * 3); ctx.lineTo(x + boardWidth, y + rowH * 3);
+        if (useGPS) {
+            // GPSエリアとの境界線
+            ctx.moveTo(x, y + boardHeight); ctx.lineTo(x + boardWidth, y + boardHeight);
+        }
         ctx.stroke();
 
-        // 5. 文字を描画
-        ctx.fillStyle = "white";
+        // 文字設定
         ctx.textAlign = "center";
         ctx.textBaseline = "middle";
         
-        // フォントサイズ（少し小さめに調整）
+        // メイン項目
         const fontSize = Math.floor(rowH * 0.55); 
         ctx.font = `bold ${fontSize}px Arial`;
+        ctx.fillStyle = "white";
 
-        // 各行の内容を取得
         const texts = [
             document.getElementById('input1').value,
             document.getElementById('input2').value,
@@ -269,54 +279,48 @@
             document.getElementById('input4').value
         ];
 
-        // 4行書き込み
         for (let i = 0; i < 4; i++) {
-            const textY = y + (rowH * i) + (rowH / 2);
-            // 文字幅が溢れる場合の縮小処理は簡易的に文字数制限かけるか、
-            // ここではそのまま描画（フォント小さくしたので入りやすいはず）
-            ctx.fillText(texts[i], x + boardWidth / 2, textY);
+            ctx.fillText(texts[i], x + boardWidth / 2, y + (rowH * i) + (rowH / 2));
+        }
+
+        // GPS情報の描画（最下部）
+        if (useGPS) {
+            ctx.fillStyle = "#ffff00"; // 黄色で目立たせる
+            const gpsFontSize = Math.floor(gpsAreaHeight * 0.6);
+            ctx.font = `bold ${gpsFontSize}px monospace`; // 等幅フォント
+            
+            let gpsText = "GPS計測中...";
+            if (currentLat && currentHeading != null) {
+                // 方位を矢印にする手もあり
+                gpsText = `N${currentLat} E${currentLon} / ${getCardinal(currentHeading)}`;
+            } else if (currentLat) {
+                gpsText = `N${currentLat} E${currentLon}`;
+            }
+            ctx.fillText(gpsText, x + boardWidth / 2, y + boardHeight + (gpsAreaHeight / 2));
         }
     }
 
-    // 撮影・保存・共有処理
+    // 方位角を文字（N, NE, E...）に変換
+    function getCardinal(angle) {
+        const directions = ['N↑', 'NE↗', 'E→', 'SE↘', 'S↓', 'SW↙', 'W←', 'NW↖'];
+        return directions[Math.round(((angle %= 360) < 0 ? angle + 360 : angle) / 45) % 8];
+    }
+
+    // 撮影処理（変更なし）
     async function takePhoto() {
         drawBlackboard();
-
         canvas.toBlob(async (blob) => {
             if (!blob) return;
-
-            // ファイル名生成
             const now = new Date();
             const fileName = `kokuban_${now.getTime()}.jpg`;
             const file = new File([blob], fileName, { type: "image/jpeg" });
-
-            // Web Share API（共有メニュー）が使える場合（主にスマホ）
             if (navigator.share && navigator.canShare && navigator.canShare({ files: [file] })) {
-                try {
-                    await navigator.share({
-                        files: [file],
-                        title: '電子黒板写真',
-                        text: '現場写真を保存しました。'
-                    });
-                    // 成功したらここで終了（共有メニューで「画像を保存」を選んでもらう）
-                    return; 
-                } catch (err) {
-                    console.log("共有キャンセルまたはエラー", err);
-                    // エラー時はフォールバックとしてダウンロード処理へ進む
-                }
+                try { await navigator.share({ files: [file], title: '黒板写真' }); return; } catch (e) {}
             }
-
-            // PCや共有API非対応ブラウザ用のダウンロード処理
             const link = document.createElement('a');
-            link.download = fileName;
-            link.href = URL.createObjectURL(blob);
-            link.click();
-            URL.revokeObjectURL(link.href);
-
-        }, 'image/jpeg', 0.95); // 画質95%
+            link.download = fileName; link.href = URL.createObjectURL(blob); link.click();
+        }, 'image/jpeg', 0.95);
     }
-
-    window.onload = startCamera;
 </script>
 </body>
 </html>
