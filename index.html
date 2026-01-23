@@ -1,0 +1,204 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>林業用 電子小黒板カメラ</title>
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
+    <style>
+        body { background-color: #f0f0f0; padding-bottom: 50px; }
+        /* カメラ表示エリアのコンテナ */
+        .camera-container {
+            position: relative;
+            width: 100%;
+            max-width: 640px;
+            margin: 0 auto;
+            background-color: #000;
+            overflow: hidden;
+        }
+        /* ビデオとキャンバスを重ねる設定 */
+        #cameraVideo, #outputCanvas {
+            width: 100%;
+            height: auto;
+            display: block;
+        }
+        /* 実際に表示するのはCanvas（加工後）だけにする手もありますが、
+           今回は「ビデオ（プレビュー）」の上に「Canvas」を裏で作ります */
+        #cameraVideo {
+            /* プレビュー用 */
+        }
+        #outputCanvas {
+            /* 撮影画像の生成用（普段は非表示でもよいが、デバッグ用に隠しておく） */
+            display: none; 
+        }
+        
+        /* 撮影ボタンのデザイン */
+        .shutter-btn {
+            width: 80px;
+            height: 80px;
+            border-radius: 50%;
+            background-color: #dc3545;
+            border: 4px solid #fff;
+            box-shadow: 0 4px 6px rgba(0,0,0,0.3);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            margin: 0 auto;
+            cursor: pointer;
+        }
+        .shutter-icon {
+            color: white;
+            font-size: 1.5rem;
+        }
+    </style>
+</head>
+<body>
+
+<div class="container mt-3">
+    <h4 class="text-center mb-3">🌲 現場用 電子小黒板</h4>
+
+    <div class="camera-container rounded shadow-sm">
+        <video id="cameraVideo" autoplay playsinline muted></video>
+        <canvas id="outputCanvas"></canvas>
+    </div>
+
+    <div class="card mt-3 shadow-sm">
+        <div class="card-body">
+            <h6 class="card-subtitle mb-2 text-muted">黒板記載事項</h6>
+            <div class="mb-2">
+                <input type="text" id="projectInfo" class="form-control" placeholder="工事名 (例: 〇〇作業道開設)" value="R7年度 作業道開設">
+            </div>
+            <div class="mb-2">
+                <input type="text" id="workType" class="form-control" placeholder="工種 (例: 路網作設工)" value="路網作設工">
+            </div>
+            <div class="row g-2">
+                <div class="col-6">
+                    <input type="text" id="positionInfo" class="form-control" placeholder="測点 (例: No.1+10)" value="No.0">
+                </div>
+                <div class="col-6">
+                    <input type="text" id="dateInfo" class="form-control" readonly>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <div class="text-center mt-4">
+        <div class="shutter-btn" onclick="takePhoto()">
+            <span class="shutter-icon">📷</span>
+        </div>
+        <p class="text-muted mt-2 small">タップして撮影・保存</p>
+    </div>
+</div>
+
+<script>
+    const video = document.getElementById('cameraVideo');
+    const canvas = document.getElementById('outputCanvas');
+    const ctx = canvas.getContext('2d');
+    
+    // 入力項目
+    const inputProject = document.getElementById('projectInfo');
+    const inputWork = document.getElementById('workType');
+    const inputPos = document.getElementById('positionInfo');
+    const inputDate = document.getElementById('dateInfo');
+
+    // 本日の日付をセット
+    const today = new Date();
+    inputDate.value = today.getFullYear() + '/' + (today.getMonth()+1) + '/' + today.getDate();
+
+    // 1. カメラを起動する関数
+    async function startCamera() {
+        try {
+            // リアカメラ（environment）を優先的に取得
+            const stream = await navigator.mediaDevices.getUserMedia({ 
+                video: { 
+                    facingMode: 'environment',
+                    width: { ideal: 1920 },
+                    height: { ideal: 1080 }
+                }, 
+                audio: false 
+            });
+            video.srcObject = stream;
+        } catch (err) {
+            alert("カメラの起動に失敗しました。HTTPSで接続しているか、カメラ権限を確認してください。\nエラー: " + err.name);
+        }
+    }
+
+    // 2. 黒板を描画する関数
+    function drawBlackboard() {
+        // キャンバスのサイズをビデオの実際のサイズに合わせる
+        canvas.width = video.videoWidth;
+        canvas.height = video.videoHeight;
+
+        // まずカメラ映像をキャンバスに描画（下地）
+        ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
+
+        // 黒板の設定（サイズや位置）
+        // 画像の右下に配置するように計算
+        const boardWidth = canvas.width * 0.35; // 画面幅の35%の大きさ
+        const boardHeight = boardWidth * 0.75;  // 4:3の比率
+        const margin = 20; // 端からの余白
+        
+        const x = canvas.width - boardWidth - margin;
+        const y = canvas.height - boardHeight - margin;
+
+        // --- 黒板の絵を描く ---
+        
+        // 黒板の背景（深緑）
+        ctx.fillStyle = "#004d26"; 
+        ctx.fillRect(x, y, boardWidth, boardHeight);
+
+        // 黒板の枠線（白）
+        ctx.strokeStyle = "white";
+        ctx.lineWidth = 3;
+        ctx.strokeRect(x, y, boardWidth, boardHeight);
+
+        // 仕切り線（横線）
+        ctx.beginPath();
+        ctx.moveTo(x, y + boardHeight / 3);
+        ctx.lineTo(x + boardWidth, y + boardHeight / 3);
+        ctx.moveTo(x, y + (boardHeight / 3) * 2);
+        ctx.lineTo(x + boardWidth, y + (boardHeight / 3) * 2);
+        ctx.stroke();
+
+        // --- 文字を書く ---
+        ctx.fillStyle = "white";
+        ctx.textAlign = "center";
+        ctx.textBaseline = "middle";
+        
+        // フォントサイズ調整（黒板の大きさに合わせる）
+        const fontSize = Math.floor(boardHeight / 5); 
+        ctx.font = `bold ${fontSize}px Arial`;
+
+        // 工事名
+        ctx.fillText(inputProject.value, x + boardWidth / 2, y + (boardHeight / 6));
+        
+        // 工種
+        ctx.fillText(inputWork.value, x + boardWidth / 2, y + (boardHeight / 2));
+
+        // 測点と日付（下段に並べる）
+        const bottomText = inputPos.value + " | " + inputDate.value;
+        ctx.font = `bold ${fontSize * 0.8}px Arial`; // 少し小さく
+        ctx.fillText(bottomText, x + boardWidth / 2, y + (boardHeight / 6) * 5);
+    }
+
+    // 3. 撮影・保存ボタンが押された時の処理
+    function takePhoto() {
+        // 黒板を描画済みのキャンバスを作る
+        drawBlackboard();
+
+        // 画像としてダウンロードさせる
+        const link = document.createElement('a');
+        // ファイル名を現在時刻にする
+        const now = new Date();
+        const timeStr = now.getHours() + '' + now.getMinutes() + '' + now.getSeconds();
+        link.download = 'genba_photo_' + timeStr + '.jpg';
+        link.href = canvas.toDataURL('image/jpeg');
+        link.click();
+    }
+
+    // ページ読み込み時にカメラ起動
+    window.onload = startCamera;
+
+</script>
+</body>
+</html>
