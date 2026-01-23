@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-    <title>電子黒板(GPS改)</title>
+    <title>電子黒板(プレビュー付)</title>
     <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
     <style>
         body { 
@@ -36,6 +36,7 @@
             width: 320px; background: #333; padding: 15px;
             overflow-y: auto; border-left: 1px solid #555;
             display: flex; flex-direction: column; gap: 10px;
+            /* margin-top: auto を削除し、上詰めで表示 */
         }
 
         .form-control-sm {
@@ -48,7 +49,8 @@
             width: 100%; padding: 15px;
             background-color: #dc3545; color: white;
             border: none; border-radius: 10px;
-            font-weight: bold; font-size: 1.2rem; margin-top: auto;
+            font-weight: bold; font-size: 1.2rem; 
+            margin-top: 10px; /* 入力欄との距離を少し空けるだけにする */
         }
         .shutter-btn:active { transform: scale(0.98); }
 
@@ -64,6 +66,28 @@
         .gps-status { font-size: 0.75rem; color: #ffd700; min-height: 1.2em; }
 
         #outputCanvas { display: none; }
+
+        /* プレビュー画面のスタイル */
+        #previewOverlay {
+            display: none;
+            position: fixed; top: 0; left: 0; width: 100%; height: 100%;
+            background: rgba(0,0,0,0.95);
+            z-index: 2000;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+        }
+        #previewImg {
+            max-width: 90%;
+            max-height: 80%;
+            border: 2px solid white;
+            margin-bottom: 20px;
+        }
+        .preview-btns {
+            display: flex; gap: 20px;
+        }
+        .btn-retake { background: #6c757d; border: none; padding: 10px 30px; color: white; border-radius: 5px; }
+        .btn-save { background: #0d6efd; border: none; padding: 10px 30px; color: white; border-radius: 5px; font-weight: bold;}
     </style>
 </head>
 <body>
@@ -71,6 +95,15 @@
     <div id="portrait-warning">
         <h1>📱くるっと回転</h1>
         <p>スマホを横向きにしてください</p>
+    </div>
+
+    <div id="previewOverlay">
+        <h5 class="text-white mb-2">この写真で保存しますか？</h5>
+        <img id="previewImg" src="">
+        <div class="preview-btns">
+            <button class="btn-retake" onclick="cancelPreview()">撮り直し</button>
+            <button class="btn-save" onclick="savePhoto()">保存する</button>
+        </div>
     </div>
 
     <div class="app-container">
@@ -101,8 +134,8 @@
             <div><label>3. 測点</label><input type="text" id="input3" class="form-control form-control-sm" value="No.0"></div>
             <div><label>4. 日付・備考</label><input type="text" id="input4" class="form-control form-control-sm" value=""></div>
 
-            <button class="shutter-btn" onclick="takePhoto()">📸 撮影・保存</button>
-            <p class="text-center text-muted mt-1" style="font-size:0.7rem;">iPhoneは「共有」→「画像を保存」</p>
+            <button class="shutter-btn" onclick="takeSnapshot()">📸 撮影確認</button>
+            <p class="text-center text-muted mt-1" style="font-size:0.7rem;">iPhoneは保存後に「画像を保存」</p>
         </div>
     </div>
 
@@ -112,6 +145,11 @@
     const ctx = canvas.getContext('2d');
     const warning = document.getElementById('portrait-warning');
     const gpsStatusDiv = document.getElementById('gpsStatus');
+    
+    // プレビュー用要素
+    const previewOverlay = document.getElementById('previewOverlay');
+    const previewImg = document.getElementById('previewImg');
+    let currentBlob = null; // 撮影した画像データを一時保存する場所
 
     const today = new Date();
     document.getElementById('input4').value = today.getFullYear() + '/' + (today.getMonth()+1) + '/' + today.getDate();
@@ -196,7 +234,7 @@
         gpsStatusDiv.innerText = text || "データ取得中...";
     }
 
-    // --- 描画ロジック修正版 ---
+    // --- 描画ロジック ---
     function drawBlackboard() {
         canvas.width = video.videoWidth;
         canvas.height = video.videoHeight;
@@ -207,17 +245,15 @@
         const boardHeight = boardWidth * 0.75; 
         const margin = canvas.width * 0.02;
 
-        // GPS枠の高さを計算（方位があるなら2行分、なければ1行分）
         let gpsAreaHeight = 0;
         let isTwoLineGPS = false;
 
         if (useGPS) {
-            // 方位データが有効なら2行にする
             if (currentHeading != null) {
-                gpsAreaHeight = boardHeight * 0.25; // 少し高さを確保
+                gpsAreaHeight = boardHeight * 0.25; 
                 isTwoLineGPS = true;
             } else {
-                gpsAreaHeight = boardHeight * 0.15; // 1行分
+                gpsAreaHeight = boardHeight * 0.15; 
                 isTwoLineGPS = false;
             }
         }
@@ -227,11 +263,9 @@
         y = canvas.height - totalHeight - margin;
         x = (boardPosition === 'right') ? (canvas.width - boardWidth - margin) : margin;
 
-        // 黒板背景
+        // 背景
         ctx.fillStyle = "#004d26"; 
         ctx.fillRect(x, y, boardWidth, boardHeight);
-        
-        // GPS背景
         if (useGPS) {
             ctx.fillStyle = "#003319";
             ctx.fillRect(x, y + boardHeight, boardWidth, gpsAreaHeight);
@@ -242,7 +276,7 @@
         ctx.lineWidth = boardWidth * 0.01;
         ctx.strokeRect(x, y, boardWidth, totalHeight);
 
-        // 黒板内の線
+        // 罫線
         const rowH = boardHeight / 4;
         ctx.beginPath();
         for(let i=1; i<=3; i++) {
@@ -253,7 +287,7 @@
         }
         ctx.stroke();
 
-        // 文字描画（黒板部）
+        // 文字
         ctx.textAlign = "center";
         ctx.textBaseline = "middle";
         ctx.fillStyle = "white";
@@ -270,28 +304,19 @@
             ctx.fillText(texts[i], x + boardWidth / 2, y + (rowH * i) + (rowH / 2));
         }
 
-        // GPS情報の描画（ここを修正）
+        // GPS文字
         if (useGPS) {
             ctx.fillStyle = "#ffff00";
-            
             if (isTwoLineGPS) {
-                // 2行表示モード
-                const gpsFontSize = Math.floor(gpsAreaHeight * 0.35); // 文字サイズ調整
+                const gpsFontSize = Math.floor(gpsAreaHeight * 0.35);
                 ctx.font = `bold ${gpsFontSize}px monospace`;
-                
-                // 1行目: 緯度経度
                 const line1 = `N${currentLat} E${currentLon}`;
                 ctx.fillText(line1, x + boardWidth / 2, y + boardHeight + (gpsAreaHeight * 0.3));
-
-                // 2行目: 方位
                 const line2 = `方位: ${getCardinal(currentHeading)} (${Math.round(currentHeading)}°)`;
                 ctx.fillText(line2, x + boardWidth / 2, y + boardHeight + (gpsAreaHeight * 0.75));
-
             } else {
-                // 1行表示モード（従来通り）
                 const gpsFontSize = Math.floor(gpsAreaHeight * 0.6);
                 ctx.font = `bold ${gpsFontSize}px monospace`;
-                
                 let gpsText = "GPS計測中...";
                 if (currentLat) gpsText = `N${currentLat} E${currentLon}`;
                 ctx.fillText(gpsText, x + boardWidth / 2, y + boardHeight + (gpsAreaHeight / 2));
@@ -304,20 +329,58 @@
         return directions[Math.round(((angle %= 360) < 0 ? angle + 360 : angle) / 45) % 8];
     }
 
-    async function takePhoto() {
+    // --- 撮影フロー修正 ---
+
+    // 1. 撮影してプレビューを表示
+    function takeSnapshot() {
         drawBlackboard();
-        canvas.toBlob(async (blob) => {
+        canvas.toBlob((blob) => {
             if (!blob) return;
-            const now = new Date();
-            const fileName = `kokuban_${now.getTime()}.jpg`;
-            const file = new File([blob], fileName, { type: "image/jpeg" });
-            if (navigator.share && navigator.canShare && navigator.canShare({ files: [file] })) {
-                try { await navigator.share({ files: [file], title: '黒板写真' }); return; } catch (e) {}
-            }
-            const link = document.createElement('a');
-            link.download = fileName; link.href = URL.createObjectURL(blob); link.click();
+            currentBlob = blob; // データを保持
+            previewImg.src = URL.createObjectURL(blob); // プレビュー表示
+            previewOverlay.style.display = 'flex'; // 画面を出す
         }, 'image/jpeg', 0.95);
     }
+
+    // 2. キャンセル（撮り直し）
+    function cancelPreview() {
+        previewOverlay.style.display = 'none';
+        URL.revokeObjectURL(previewImg.src); // メモリ解放
+        currentBlob = null;
+    }
+
+    // 3. 保存実行
+    async function savePhoto() {
+        if (!currentBlob) return;
+
+        const now = new Date();
+        const fileName = `kokuban_${now.getTime()}.jpg`;
+        const file = new File([currentBlob], fileName, { type: "image/jpeg" });
+
+        // iOSなどの共有メニュー
+        if (navigator.share && navigator.canShare && navigator.canShare({ files: [file] })) {
+            try {
+                await navigator.share({
+                    files: [file],
+                    title: '黒板写真',
+                });
+                // シェア完了後、プレビューを閉じる
+                cancelPreview();
+                return;
+            } catch (err) {
+                console.log("シェアキャンセル");
+            }
+        }
+
+        // PCなどのダウンロード
+        const link = document.createElement('a');
+        link.download = fileName;
+        link.href = URL.createObjectURL(currentBlob);
+        link.click();
+        
+        cancelPreview(); // ダウンロード後に閉じる
+    }
+
 </script>
 </body>
 </html>
