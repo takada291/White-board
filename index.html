@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-    <title>電子黒板(GPS付)</title>
+    <title>電子黒板(GPS改)</title>
     <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
     <style>
         body { 
@@ -60,7 +60,6 @@
         }
         .pos-btn.active { background: #0d6efd; color: white; border-color: #0d6efd; }
 
-        /* GPSスイッチのデザイン */
         .form-check-input { cursor: pointer; }
         .gps-status { font-size: 0.75rem; color: #ffd700; min-height: 1.2em; }
 
@@ -114,7 +113,6 @@
     const warning = document.getElementById('portrait-warning');
     const gpsStatusDiv = document.getElementById('gpsStatus');
 
-    // 日付初期化
     const today = new Date();
     document.getElementById('input4').value = today.getFullYear() + '/' + (today.getMonth()+1) + '/' + today.getDate();
 
@@ -125,14 +123,12 @@
         document.getElementById('btnRight').className = pos === 'right' ? 'pos-btn active' : 'pos-btn';
     }
 
-    // 縦横検知
     function checkOrientation() {
         warning.style.display = (window.innerWidth < window.innerHeight) ? 'flex' : 'none';
     }
     window.addEventListener('resize', checkOrientation);
     checkOrientation();
 
-    // カメラ起動
     async function startCamera() {
         try {
             const stream = await navigator.mediaDevices.getUserMedia({ 
@@ -143,11 +139,11 @@
     }
     window.onload = startCamera;
 
-    // --- GPS & 方位センサー関連 ---
+    // --- GPS Logic ---
     let useGPS = false;
     let currentLat = null;
     let currentLon = null;
-    let currentHeading = null; // 方位 (0-360)
+    let currentHeading = null;
     let watchId = null;
 
     async function toggleGPS() {
@@ -156,8 +152,6 @@
 
         if (useGPS) {
             gpsStatusDiv.innerText = "測位中...";
-            
-            // 1. 位置情報の監視開始
             if (navigator.geolocation) {
                 watchId = navigator.geolocation.watchPosition(
                     (pos) => {
@@ -169,25 +163,15 @@
                     { enableHighAccuracy: true }
                 );
             }
-
-            // 2. 方位センサー（iOS対応）
             if (typeof DeviceOrientationEvent !== 'undefined' && typeof DeviceOrientationEvent.requestPermission === 'function') {
-                // iOS 13+ は許可が必要
                 try {
                     const permission = await DeviceOrientationEvent.requestPermission();
-                    if (permission === 'granted') {
-                        window.addEventListener('deviceorientation', handleOrientation);
-                    } else {
-                        alert("方位の許可が得られませんでした");
-                    }
-                } catch (e) { console.log(e); }
+                    if (permission === 'granted') window.addEventListener('deviceorientation', handleOrientation);
+                } catch (e) {}
             } else {
-                // Android / PC他
                 window.addEventListener('deviceorientation', handleOrientation);
             }
-
         } else {
-            // OFFにする処理
             gpsStatusDiv.innerText = "OFF";
             if (watchId) navigator.geolocation.clearWatch(watchId);
             window.removeEventListener('deviceorientation', handleOrientation);
@@ -196,12 +180,9 @@
     }
 
     function handleOrientation(event) {
-        // 方位取得 (iOS webkitCompassHeading, Android alpha)
         if (event.webkitCompassHeading) {
-            currentHeading = event.webkitCompassHeading; // iOS
+            currentHeading = event.webkitCompassHeading;
         } else if (event.alpha) {
-            // Androidのalphaは「北=0」とは限らないが、簡易的に使用
-            // 厳密には絶対方位(absolute)の計算が必要だが、今回は簡易実装
             currentHeading = 360 - event.alpha; 
         }
         updateStatusText();
@@ -211,66 +192,73 @@
         if (!useGPS) return;
         let text = "";
         if (currentLat) text += `N${currentLat} E${currentLon} `;
-        if (currentHeading != null) text += ` 方位:${Math.round(currentHeading)}°`;
+        if (currentHeading != null) text += ` ${getCardinal(currentHeading)}`;
         gpsStatusDiv.innerText = text || "データ取得中...";
     }
 
-    // --- 描画処理 ---
+    // --- 描画ロジック修正版 ---
     function drawBlackboard() {
         canvas.width = video.videoWidth;
         canvas.height = video.videoHeight;
         
         ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
 
-        // 黒板サイズ
         const boardWidth = canvas.width * 0.25; 
         const boardHeight = boardWidth * 0.75; 
         const margin = canvas.width * 0.02;
 
-        let x, y;
-        // GPS情報がある場合、黒板の下に少しスペースを追加して描画するか、
-        // 黒板の中に押し込むか。今回は「黒板の下部に追加枠」を作るイメージで
-        const gpsAreaHeight = useGPS ? (boardHeight * 0.15) : 0; 
-        const totalHeight = boardHeight + gpsAreaHeight;
+        // GPS枠の高さを計算（方位があるなら2行分、なければ1行分）
+        let gpsAreaHeight = 0;
+        let isTwoLineGPS = false;
 
+        if (useGPS) {
+            // 方位データが有効なら2行にする
+            if (currentHeading != null) {
+                gpsAreaHeight = boardHeight * 0.25; // 少し高さを確保
+                isTwoLineGPS = true;
+            } else {
+                gpsAreaHeight = boardHeight * 0.15; // 1行分
+                isTwoLineGPS = false;
+            }
+        }
+
+        const totalHeight = boardHeight + gpsAreaHeight;
+        let x, y;
         y = canvas.height - totalHeight - margin;
         x = (boardPosition === 'right') ? (canvas.width - boardWidth - margin) : margin;
 
-        // 黒板本体の背景
+        // 黒板背景
         ctx.fillStyle = "#004d26"; 
         ctx.fillRect(x, y, boardWidth, boardHeight);
         
-        // GPSエリアの背景（少し暗くする、あるいは同じ色）
+        // GPS背景
         if (useGPS) {
-            ctx.fillStyle = "#003319"; // 少し濃い緑
+            ctx.fillStyle = "#003319";
             ctx.fillRect(x, y + boardHeight, boardWidth, gpsAreaHeight);
         }
 
         // 外枠
         ctx.strokeStyle = "white";
         ctx.lineWidth = boardWidth * 0.01;
-        ctx.strokeRect(x, y, boardWidth, totalHeight); // 全体を囲む
+        ctx.strokeRect(x, y, boardWidth, totalHeight);
 
-        // 罫線
+        // 黒板内の線
         const rowH = boardHeight / 4;
         ctx.beginPath();
-        ctx.moveTo(x, y + rowH * 1); ctx.lineTo(x + boardWidth, y + rowH * 1);
-        ctx.moveTo(x, y + rowH * 2); ctx.lineTo(x + boardWidth, y + rowH * 2);
-        ctx.moveTo(x, y + rowH * 3); ctx.lineTo(x + boardWidth, y + rowH * 3);
+        for(let i=1; i<=3; i++) {
+            ctx.moveTo(x, y + rowH * i); ctx.lineTo(x + boardWidth, y + rowH * i);
+        }
         if (useGPS) {
-            // GPSエリアとの境界線
             ctx.moveTo(x, y + boardHeight); ctx.lineTo(x + boardWidth, y + boardHeight);
         }
         ctx.stroke();
 
-        // 文字設定
+        // 文字描画（黒板部）
         ctx.textAlign = "center";
         ctx.textBaseline = "middle";
-        
-        // メイン項目
+        ctx.fillStyle = "white";
         const fontSize = Math.floor(rowH * 0.55); 
         ctx.font = `bold ${fontSize}px Arial`;
-        ctx.fillStyle = "white";
 
         const texts = [
             document.getElementById('input1').value,
@@ -278,35 +266,44 @@
             document.getElementById('input3').value,
             document.getElementById('input4').value
         ];
-
         for (let i = 0; i < 4; i++) {
             ctx.fillText(texts[i], x + boardWidth / 2, y + (rowH * i) + (rowH / 2));
         }
 
-        // GPS情報の描画（最下部）
+        // GPS情報の描画（ここを修正）
         if (useGPS) {
-            ctx.fillStyle = "#ffff00"; // 黄色で目立たせる
-            const gpsFontSize = Math.floor(gpsAreaHeight * 0.6);
-            ctx.font = `bold ${gpsFontSize}px monospace`; // 等幅フォント
+            ctx.fillStyle = "#ffff00";
             
-            let gpsText = "GPS計測中...";
-            if (currentLat && currentHeading != null) {
-                // 方位を矢印にする手もあり
-                gpsText = `N${currentLat} E${currentLon} / ${getCardinal(currentHeading)}`;
-            } else if (currentLat) {
-                gpsText = `N${currentLat} E${currentLon}`;
+            if (isTwoLineGPS) {
+                // 2行表示モード
+                const gpsFontSize = Math.floor(gpsAreaHeight * 0.35); // 文字サイズ調整
+                ctx.font = `bold ${gpsFontSize}px monospace`;
+                
+                // 1行目: 緯度経度
+                const line1 = `N${currentLat} E${currentLon}`;
+                ctx.fillText(line1, x + boardWidth / 2, y + boardHeight + (gpsAreaHeight * 0.3));
+
+                // 2行目: 方位
+                const line2 = `方位: ${getCardinal(currentHeading)} (${Math.round(currentHeading)}°)`;
+                ctx.fillText(line2, x + boardWidth / 2, y + boardHeight + (gpsAreaHeight * 0.75));
+
+            } else {
+                // 1行表示モード（従来通り）
+                const gpsFontSize = Math.floor(gpsAreaHeight * 0.6);
+                ctx.font = `bold ${gpsFontSize}px monospace`;
+                
+                let gpsText = "GPS計測中...";
+                if (currentLat) gpsText = `N${currentLat} E${currentLon}`;
+                ctx.fillText(gpsText, x + boardWidth / 2, y + boardHeight + (gpsAreaHeight / 2));
             }
-            ctx.fillText(gpsText, x + boardWidth / 2, y + boardHeight + (gpsAreaHeight / 2));
         }
     }
 
-    // 方位角を文字（N, NE, E...）に変換
     function getCardinal(angle) {
         const directions = ['N↑', 'NE↗', 'E→', 'SE↘', 'S↓', 'SW↙', 'W←', 'NW↖'];
         return directions[Math.round(((angle %= 360) < 0 ? angle + 360 : angle) / 45) % 8];
     }
 
-    // 撮影処理（変更なし）
     async function takePhoto() {
         drawBlackboard();
         canvas.toBlob(async (blob) => {
