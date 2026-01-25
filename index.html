@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-    <title>White-board-v1.0.0</title>
+    <title>White-board-v1.2</title>
     <link rel="manifest" href="manifest.json">
     <meta name="theme-color" content="#004d26">
     <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
@@ -116,7 +116,7 @@
         </div>
 
         <div class="control-panel">
-            <h6 class="text-center border-bottom pb-2">電子黒板 v1.1</h6>
+            <h6 class="text-center border-bottom pb-2">電子黒板 v1.2</h6>
 
             <div class="d-flex justify-content-between align-items-center">
                 <label>黒板位置</label>
@@ -232,31 +232,21 @@
 
     function handleOrientation(event) {
         let heading = null;
-
-        // 1. デバイス自体の向き（コンパス）を取得
         if (event.webkitCompassHeading) {
-            // iOS
             heading = event.webkitCompassHeading;
         } else if (event.alpha) {
-            // Android (簡易補正)
             heading = 360 - event.alpha; 
         }
 
-        // 2. 画面の回転角度（横向きかどうか）を取得して補正
         if (heading != null) {
             let screenAngle = 0;
-            
-            // 画面の向きを取得 (ブラウザ互換性対応)
             if (window.screen && window.screen.orientation && window.screen.orientation.angle) {
                 screenAngle = window.screen.orientation.angle;
             } else if (typeof window.orientation !== 'undefined') {
                 screenAngle = window.orientation;
             }
-
-            // コンパスの値に画面の回転分を足す
             heading = (heading + screenAngle) % 360;
             if (heading < 0) heading += 360;
-
             currentHeading = heading;
             updateStatusText();
         }
@@ -270,60 +260,42 @@
         gpsStatusDiv.innerText = text || "データ取得中...";
     }
 
-    // --- Drawing Logic ---
+    // --- Drawing Logic (Updated) ---
     function drawBlackboard() {
         canvas.width = video.videoWidth;
         canvas.height = video.videoHeight;
         
+        // 0. 写真を描画
         ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
 
+        // --- 1. メインの電子黒板を描画 ---
         const boardWidth = canvas.width * 0.25; 
         const boardHeight = boardWidth * 0.75; 
         const margin = canvas.width * 0.02;
 
-        let gpsAreaHeight = 0;
-        let isTwoLineGPS = false;
-
-        if (useGPS) {
-            if (currentHeading != null) {
-                gpsAreaHeight = boardHeight * 0.25; 
-                isTwoLineGPS = true;
-            } else {
-                gpsAreaHeight = boardHeight * 0.15; 
-                isTwoLineGPS = false;
-            }
-        }
-
-        const totalHeight = boardHeight + gpsAreaHeight;
         let x, y;
-        y = canvas.height - totalHeight - margin;
+        // 黒板は常に画面下端（GPS枠とは関係なく配置）
+        y = canvas.height - boardHeight - margin;
         x = (boardPosition === 'right') ? (canvas.width - boardWidth - margin) : margin;
 
-        // Backgrounds
+        // 背景
         ctx.fillStyle = "#004d26"; 
         ctx.fillRect(x, y, boardWidth, boardHeight);
-        if (useGPS) {
-            ctx.fillStyle = "#003319";
-            ctx.fillRect(x, y + boardHeight, boardWidth, gpsAreaHeight);
-        }
-
-        // Stroke
+        
+        // 枠線
         ctx.strokeStyle = "white";
         ctx.lineWidth = boardWidth * 0.01;
-        ctx.strokeRect(x, y, boardWidth, totalHeight);
+        ctx.strokeRect(x, y, boardWidth, boardHeight);
 
-        // Lines
+        // 罫線
         const rowH = boardHeight / 4;
         ctx.beginPath();
         for(let i=1; i<=3; i++) {
             ctx.moveTo(x, y + rowH * i); ctx.lineTo(x + boardWidth, y + rowH * i);
         }
-        if (useGPS) {
-            ctx.moveTo(x, y + boardHeight); ctx.lineTo(x + boardWidth, y + boardHeight);
-        }
         ctx.stroke();
 
-        // Text
+        // 黒板文字
         ctx.textAlign = "center";
         ctx.textBaseline = "middle";
         ctx.fillStyle = "white";
@@ -340,22 +312,55 @@
             ctx.fillText(texts[i], x + boardWidth / 2, y + (rowH * i) + (rowH / 2));
         }
 
-        // GPS Text
+        // --- 2. GPS情報を下端中央に別枠で描画 ---
         if (useGPS) {
-            ctx.fillStyle = "#ffff00";
-            if (isTwoLineGPS) {
-                const gpsFontSize = Math.floor(gpsAreaHeight * 0.35);
-                ctx.font = `bold ${gpsFontSize}px monospace`;
-                const line1 = `N${currentLat} E${currentLon}`;
-                ctx.fillText(line1, x + boardWidth / 2, y + boardHeight + (gpsAreaHeight * 0.3));
-                const line2 = `方位: ${getCardinal(currentHeading)} (${Math.round(currentHeading)}°)`;
-                ctx.fillText(line2, x + boardWidth / 2, y + boardHeight + (gpsAreaHeight * 0.75));
+            // 文字の準備
+            let line1 = "";
+            let line2 = "";
+            if (currentLat) line1 = `N${currentLat} E${currentLon}`;
+            if (currentHeading != null) line2 = `方位: ${getCardinal(currentHeading)} (${Math.round(currentHeading)}°)`;
+            
+            if (!line1 && !line2) line1 = "GPS計測中...";
+
+            // フォント設定（画面サイズに合わせて調整）
+            const gpsFontSize = Math.floor(canvas.height * 0.03); // 画面高さの3%
+            ctx.font = `bold ${gpsFontSize}px monospace`;
+
+            // 枠のサイズ計算
+            const padding = gpsFontSize * 0.5;
+            const textWidth1 = ctx.measureText(line1).width;
+            const textWidth2 = ctx.measureText(line2).width;
+            const maxTextWidth = Math.max(textWidth1, textWidth2);
+            
+            const gpsBoxWidth = maxTextWidth + (padding * 4);
+            const lineHeight = gpsFontSize * 1.2;
+            const gpsBoxHeight = (line2 ? lineHeight * 2 : lineHeight) + (padding * 2);
+
+            // 位置計算（下端中央）
+            const gpsX = (canvas.width - gpsBoxWidth) / 2;
+            const gpsY = canvas.height - gpsBoxHeight - margin;
+
+            // GPS枠の背景（半透明の濃い緑）
+            ctx.fillStyle = "rgba(0, 51, 25, 0.85)"; 
+            ctx.fillRect(gpsX, gpsY, gpsBoxWidth, gpsBoxHeight);
+
+            // GPS枠線（オプション：不要なら削除可）
+            // ctx.strokeStyle = "white";
+            // ctx.lineWidth = 1;
+            // ctx.strokeRect(gpsX, gpsY, gpsBoxWidth, gpsBoxHeight);
+
+            // GPS文字描画
+            ctx.fillStyle = "#ffff00"; // 黄色
+            ctx.textAlign = "center";
+            ctx.textBaseline = "middle";
+            
+            if (line2) {
+                // 2行表示
+                ctx.fillText(line1, canvas.width / 2, gpsY + padding + lineHeight/2);
+                ctx.fillText(line2, canvas.width / 2, gpsY + padding + lineHeight*1.5);
             } else {
-                const gpsFontSize = Math.floor(gpsAreaHeight * 0.6);
-                ctx.font = `bold ${gpsFontSize}px monospace`;
-                let gpsText = "GPS計測中...";
-                if (currentLat) gpsText = `N${currentLat} E${currentLon}`;
-                ctx.fillText(gpsText, x + boardWidth / 2, y + boardHeight + (gpsAreaHeight * 0.6)); // 少し位置調整
+                // 1行表示
+                ctx.fillText(line1, canvas.width / 2, gpsY + gpsBoxHeight/2);
             }
         }
     }
@@ -403,4 +408,3 @@
 </script>
 </body>
 </html>
-
