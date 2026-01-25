@@ -231,12 +231,35 @@
     }
 
     function handleOrientation(event) {
+        let heading = null;
+
+        // 1. デバイス自体の向き（コンパス）を取得
         if (event.webkitCompassHeading) {
-            currentHeading = event.webkitCompassHeading;
+            // iOS
+            heading = event.webkitCompassHeading;
         } else if (event.alpha) {
-            currentHeading = 360 - event.alpha; 
+            // Android (簡易補正)
+            heading = 360 - event.alpha; 
         }
-        updateStatusText();
+
+        // 2. 画面の回転角度（横向きかどうか）を取得して補正
+        if (heading != null) {
+            let screenAngle = 0;
+            
+            // 画面の向きを取得 (ブラウザ互換性対応)
+            if (window.screen && window.screen.orientation && window.screen.orientation.angle) {
+                screenAngle = window.screen.orientation.angle;
+            } else if (typeof window.orientation !== 'undefined') {
+                screenAngle = window.orientation;
+            }
+
+            // コンパスの値に画面の回転分を足す
+            heading = (heading + screenAngle) % 360;
+            if (heading < 0) heading += 360;
+
+            currentHeading = heading;
+            updateStatusText();
+        }
     }
 
     function updateStatusText() {
@@ -332,7 +355,7 @@
                 ctx.font = `bold ${gpsFontSize}px monospace`;
                 let gpsText = "GPS計測中...";
                 if (currentLat) gpsText = `N${currentLat} E${currentLon}`;
-                ctx.fillText(gpsText, x + boardWidth / 2, y + boardHeight + (gpsAreaHeight / 2));
+                ctx.fillText(gpsText, x + boardWidth / 2, y + boardHeight + (gpsAreaHeight * 0.6)); // 少し位置調整
             }
         }
     }
@@ -380,4 +403,3 @@
 </script>
 </body>
 </html>
-
