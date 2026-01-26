@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-    <title>White-board-v1.3</title>
+    <title>White-board-v1.4</title>
     <link rel="manifest" href="manifest.json">
     <meta name="theme-color" content="#004d26">
     <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
@@ -59,6 +59,20 @@
             margin-top: 10px;
         }
         .shutter-btn:active { transform: scale(0.98); }
+
+        /* 定型文エリア */
+        .preset-box {
+            background: #444; padding: 10px; border-radius: 5px; margin-bottom: 5px;
+        }
+        .preset-btn-group {
+            display: flex; gap: 5px; margin-top: 5px;
+        }
+        .preset-btn {
+            flex: 1; font-size: 0.8rem; padding: 5px;
+            border: none; border-radius: 3px; cursor: pointer;
+        }
+        .btn-load { background: #0d6efd; color: white; }
+        .btn-save { background: #198754; color: white; }
 
         /* その他UIパーツ */
         .pos-switch { display: flex; gap: 10px; margin-bottom: 5px; }
@@ -116,7 +130,7 @@
         </div>
 
         <div class="control-panel">
-            <h6 class="text-center border-bottom pb-2">電子黒板 v1.3</h6>
+            <h6 class="text-center border-bottom pb-2">電子黒板 v1.4</h6>
 
             <div class="d-flex justify-content-between align-items-center">
                 <label>黒板位置</label>
@@ -130,6 +144,21 @@
                 <input class="form-check-input" type="checkbox" id="gpsToggle" onchange="toggleGPS()">
                 <label class="form-check-label" for="gpsToggle">📍 位置・方位情報を記録</label>
                 <div id="gpsStatus" class="gps-status">OFF</div>
+            </div>
+
+            <div class="preset-box">
+                <label>定型文 (工事名・工種)</label>
+                <select id="presetSelect" class="form-control form-control-sm mb-1">
+                    <option value="1">定型文 1</option>
+                    <option value="2">定型文 2</option>
+                    <option value="3">定型文 3</option>
+                    <option value="4">定型文 4</option>
+                    <option value="5">定型文 5</option>
+                </select>
+                <div class="preset-btn-group">
+                    <button class="preset-btn btn-load" onclick="loadPreset()">📂 読込</button>
+                    <button class="preset-btn btn-save" onclick="savePreset()">💾 現在の内容を保存</button>
+                </div>
             </div>
 
             <div><label>1. 工事名</label><input type="text" id="input1" class="form-control form-control-sm" value="R7年度 作業道開設"></div>
@@ -189,6 +218,30 @@
         } catch (err) { alert("カメラ起動エラー: " + err.message); }
     }
     window.onload = startCamera;
+
+    // --- Preset Logic (定型文) ---
+    function savePreset() {
+        const slot = document.getElementById('presetSelect').value;
+        const val1 = document.getElementById('input1').value;
+        const val2 = document.getElementById('input2').value;
+        
+        // ローカルストレージに保存
+        localStorage.setItem('preset_' + slot + '_1', val1);
+        localStorage.setItem('preset_' + slot + '_2', val2);
+        
+        alert(`定型文${slot}に保存しました。\n① ${val1}\n② ${val2}`);
+    }
+
+    function loadPreset() {
+        const slot = document.getElementById('presetSelect').value;
+        const val1 = localStorage.getItem('preset_' + slot + '_1');
+        const val2 = localStorage.getItem('preset_' + slot + '_2');
+
+        if (val1 !== null) document.getElementById('input1').value = val1;
+        if (val2 !== null) document.getElementById('input2').value = val2;
+        
+        if (val1 === null) alert("保存された定型文がありません");
+    }
 
     // --- GPS Logic ---
     let useGPS = false;
@@ -265,16 +318,15 @@
         canvas.width = video.videoWidth;
         canvas.height = video.videoHeight;
         
-        // 0. 写真を描画
         ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
 
         // --- 1. メインの電子黒板を描画 ---
         const boardWidth = canvas.width * 0.25; 
-        const boardHeight = boardWidth * 0.75; 
+        // 【修正】高さを少し低く調整 (0.75 -> 0.65)
+        const boardHeight = boardWidth * 0.65; 
         const margin = canvas.width * 0.02;
 
         let x, y;
-        // 黒板は常に画面下端（GPS枠とは関係なく配置）
         y = canvas.height - boardHeight - margin;
         x = (boardPosition === 'right') ? (canvas.width - boardWidth - margin) : margin;
 
@@ -299,8 +351,9 @@
         ctx.textAlign = "center";
         ctx.textBaseline = "middle";
         ctx.fillStyle = "white";
-        const fontSize = Math.floor(rowH * 0.55); 
-        ctx.font = `bold ${fontSize}px Arial`;
+        
+        // 基準フォントサイズ
+        const baseFontSize = Math.floor(rowH * 0.55); 
 
         const texts = [
             document.getElementById('input1').value,
@@ -308,58 +361,57 @@
             document.getElementById('input3').value,
             document.getElementById('input4').value
         ];
+
+        // 【修正】文字縮小処理
+        const maxTextWidth = boardWidth * 0.95; // 左右に少し余裕を持たせる
+
         for (let i = 0; i < 4; i++) {
+            let fontSize = baseFontSize;
+            ctx.font = `bold ${fontSize}px Arial`;
+            
+            // 文字が枠からはみ出る場合、小さくする
+            while (ctx.measureText(texts[i]).width > maxTextWidth && fontSize > 5) {
+                fontSize--;
+                ctx.font = `bold ${fontSize}px Arial`;
+            }
+
             ctx.fillText(texts[i], x + boardWidth / 2, y + (rowH * i) + (rowH / 2));
         }
 
         // --- 2. GPS情報を下端中央に別枠で描画 ---
         if (useGPS) {
-            // 文字の準備
             let line1 = "";
             let line2 = "";
             if (currentLat) line1 = `N${currentLat} E${currentLon}`;
             if (currentHeading != null) line2 = `方位: ${getCardinal(currentHeading)} (${Math.round(currentHeading)}°)`;
-            
             if (!line1 && !line2) line1 = "GPS計測中...";
 
-            // フォント設定（画面サイズに合わせて調整）
-            const gpsFontSize = Math.floor(canvas.height * 0.03); // 画面高さの3%
+            const gpsFontSize = Math.floor(canvas.height * 0.03); 
             ctx.font = `bold ${gpsFontSize}px monospace`;
 
-            // 枠のサイズ計算
             const padding = gpsFontSize * 0.5;
             const textWidth1 = ctx.measureText(line1).width;
             const textWidth2 = ctx.measureText(line2).width;
-            const maxTextWidth = Math.max(textWidth1, textWidth2);
+            const maxGPSWidth = Math.max(textWidth1, textWidth2);
             
-            const gpsBoxWidth = maxTextWidth + (padding * 4);
+            const gpsBoxWidth = maxGPSWidth + (padding * 4);
             const lineHeight = gpsFontSize * 1.2;
             const gpsBoxHeight = (line2 ? lineHeight * 2 : lineHeight) + (padding * 2);
 
-            // 位置計算（下端中央）
             const gpsX = (canvas.width - gpsBoxWidth) / 2;
             const gpsY = canvas.height - gpsBoxHeight - margin;
 
-            // GPS枠の背景（半透明の濃い緑）
             ctx.fillStyle = "rgba(0, 51, 25, 0.85)"; 
             ctx.fillRect(gpsX, gpsY, gpsBoxWidth, gpsBoxHeight);
 
-            // GPS枠線（オプション：不要なら削除可）
-            // ctx.strokeStyle = "white";
-            // ctx.lineWidth = 1;
-            // ctx.strokeRect(gpsX, gpsY, gpsBoxWidth, gpsBoxHeight);
-
-            // GPS文字描画
-            ctx.fillStyle = "#ffff00"; // 黄色
+            ctx.fillStyle = "#ffff00"; 
             ctx.textAlign = "center";
             ctx.textBaseline = "middle";
             
             if (line2) {
-                // 2行表示
                 ctx.fillText(line1, canvas.width / 2, gpsY + padding + lineHeight/2);
                 ctx.fillText(line2, canvas.width / 2, gpsY + padding + lineHeight*1.5);
             } else {
-                // 1行表示
                 ctx.fillText(line1, canvas.width / 2, gpsY + gpsBoxHeight/2);
             }
         }
@@ -408,5 +460,3 @@
 </script>
 </body>
 </html>
-
-
