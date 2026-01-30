@@ -1,4 +1,4 @@
-const CACHE_NAME = 'white-board-v1.6.0';
+const CACHE_NAME = 'white-board-v1.6.1';
 const urlsToCache = [
   './',
   './index.html',
@@ -31,6 +31,7 @@ self.addEventListener('fetch', function(event) {
   );
 
 });
+
 
 
 
