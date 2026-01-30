@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-    <title>White-board-v1.5</title>
+    <title>電子黒板-v1.6</title>
     <link rel="manifest" href="manifest.json">
     <meta name="theme-color" content="#004d26">
     <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
@@ -38,75 +38,91 @@
 
         /* 右側パネル */
         .control-panel {
-            width: 320px; background: #333; padding: 10px; /* パディングを少し調整 */
-            overflow-y: auto; border-left: 1px solid #555;
-            display: flex; flex-direction: column; gap: 5px; /* 隙間を詰める */
-            padding-bottom: 50px; /* 下部に余白を追加してボタンを押しやすく */
+            width: 320px; background: #333; padding: 10px;
+            overflow-y: hidden; /* タブ内スクロールのため親はhidden */
+            border-left: 1px solid #555;
+            display: flex; flex-direction: column;
         }
 
-        /* フォーム部品：省スペース化 */
-        .form-control-sm {
-            background-color: #444; color: white; border: 1px solid #666;
-            font-size: 0.9rem; /* 文字を少し小さく */
-            padding: 4px 8px; /* 内側の余白も少し詰める */
+        /* タブ切り替えボタン */
+        .tab-header {
+            display: flex; gap: 5px; margin-bottom: 10px; flex-shrink: 0;
         }
-        .form-control-sm:focus { background-color: #555; color: white; }
-        label { font-size: 0.75rem; color: #ccc; margin-bottom: 0; } /* ラベルもコンパクトに */
+        .tab-btn {
+            flex: 1; padding: 10px; border: none; border-radius: 5px;
+            font-weight: bold; font-size: 0.9rem; cursor: pointer;
+            background-color: #555; color: #ccc; transition: 0.2s;
+        }
+        .tab-btn.active {
+            background-color: #0d6efd; color: white;
+        }
 
-        /* 撮影ボタン：巨大化 */
-        .shutter-btn {
+        /* タブコンテンツ領域 */
+        .tab-content {
+            flex: 1; overflow-y: auto; display: none; flex-direction: column;
+        }
+        .tab-content.active {
+            display: flex;
+        }
+
+        /* --- 撮影タブ用スタイル --- */
+        /* 撮影ボタン（超巨大化） */
+        .shutter-btn-large {
             width: 100%; 
-            height: 80px; /* 高さを指定して大きく */
+            flex: 1; /* 残りのスペースを埋める */
+            min-height: 120px; /* 最低でもこの高さ */
             background-color: #dc3545; color: white;
             border: none; border-radius: 15px;
-            font-weight: bold; font-size: 1.5rem; /* 文字も大きく */
-            margin-top: 15px;
-            box-shadow: 0 4px 8px rgba(0,0,0,0.4); /* 立体感 */
-            display: flex; align-items: center; justify-content: center;
+            font-weight: bold; font-size: 2rem;
+            margin-top: auto; /* 下寄せ */
+            margin-bottom: 10px;
+            box-shadow: 0 6px 12px rgba(0,0,0,0.5);
+            display: flex; align-items: center; justify-content: center; gap: 10px;
         }
-        .shutter-btn:active { transform: scale(0.96); box-shadow: 0 2px 4px rgba(0,0,0,0.4); }
+        .shutter-btn-large:active { transform: scale(0.98); box-shadow: 0 3px 6px rgba(0,0,0,0.5); }
+
+        /* --- 記入タブ用スタイル --- */
+        .form-control-sm {
+            background-color: #444; color: white; border: 1px solid #666; font-size: 0.9rem; padding: 6px;
+        }
+        .form-control-sm:focus { background-color: #555; color: white; }
+        label { font-size: 0.8rem; color: #ccc; margin-top: 5px; margin-bottom: 2px; }
 
         /* 定型文エリア */
         .preset-box {
-            background: #444; padding: 8px; border-radius: 5px; margin-bottom: 5px;
+            background: #444; padding: 10px; border-radius: 5px; margin-bottom: 10px;
         }
         .preset-btn-group {
             display: flex; gap: 5px; margin-top: 5px;
         }
         .preset-btn {
-            flex: 1; font-size: 0.8rem; padding: 8px 5px; /* ボタンを少し押しやすく */
-            border: none; border-radius: 3px; cursor: pointer;
+            flex: 1; font-size: 0.8rem; padding: 8px; border: none; border-radius: 3px; cursor: pointer;
         }
         .btn-load { background: #0d6efd; color: white; }
         .btn-save { background: #198754; color: white; }
 
-        /* その他UIパーツ */
+        /* 共通UIパーツ */
         .pos-switch { display: flex; gap: 10px; margin-bottom: 5px; }
         .pos-btn {
-            flex: 1; padding: 5px; font-size: 0.8rem;
+            flex: 1; padding: 8px; font-size: 0.9rem;
             background: #555; border: 1px solid #777; color: #aaa;
             text-align: center; border-radius: 5px; cursor: pointer;
         }
         .pos-btn.active { background: #0d6efd; color: white; border-color: #0d6efd; }
 
-        .form-check-input { cursor: pointer; }
-        .gps-status { font-size: 0.75rem; color: #ffd700; min-height: 1.2em; }
+        .form-check-input { cursor: pointer; width: 3em; height: 1.5em; }
+        .gps-status { font-size: 0.75rem; color: #ffd700; min-height: 1.2em; margin-top: 2px;}
 
         #outputCanvas { display: none; }
 
         /* プレビュー画面 */
         #previewOverlay {
-            display: none;
-            position: fixed; top: 0; left: 0; width: 100%; height: 100%;
-            background: rgba(0,0,0,0.95);
-            z-index: 2000;
-            flex-direction: column;
-            align-items: center;
-            justify-content: center;
+            display: none; position: fixed; top: 0; left: 0; width: 100%; height: 100%;
+            background: rgba(0,0,0,0.95); z-index: 2000;
+            flex-direction: column; align-items: center; justify-content: center;
         }
         #previewImg {
-            max-width: 90%; max-height: 80%;
-            border: 2px solid white; margin-bottom: 20px;
+            max-width: 90%; max-height: 80%; border: 2px solid white; margin-bottom: 20px;
         }
         .preview-btns { display: flex; gap: 20px; }
         .btn-retake { background: #6c757d; border: none; padding: 10px 30px; color: white; border-radius: 5px; }
@@ -136,48 +152,80 @@
         </div>
 
         <div class="control-panel">
-            <h6 class="text-center border-bottom pb-2">電子黒板 v1.5</h6>
+            
+            <div class="tab-header">
+                <button class="tab-btn active" onclick="switchTab('shoot')" id="tabBtn-shoot">📸 撮影</button>
+                <button class="tab-btn" onclick="switchTab('edit')" id="tabBtn-edit">📝 記入</button>
+            </div>
 
-            <div class="d-flex justify-content-between align-items-center">
-                <label>黒板位置</label>
-                <div class="pos-switch" style="width: 60%;">
-                    <div class="pos-btn" onclick="setBoardPos('left')" id="btnLeft">左下</div>
-                    <div class="pos-btn active" onclick="setBoardPos('right')" id="btnRight">右下</div>
+            <div id="tab-shoot" class="tab-content active">
+                <h6 class="text-center text-muted border-bottom pb-2">撮影設定</h6>
+
+                <div class="d-flex justify-content-between align-items-center mb-2">
+                    <label style="font-size:0.9rem;">黒板位置</label>
+                    <div class="pos-switch" style="width: 60%;">
+                        <div class="pos-btn" onclick="setBoardPos('left')" id="btnLeft">左下</div>
+                        <div class="pos-btn active" onclick="setBoardPos('right')" id="btnRight">右下</div>
+                    </div>
+                </div>
+
+                <div class="form-check form-switch border-bottom pb-2 mb-3">
+                    <input class="form-check-input" type="checkbox" id="gpsToggle" onchange="toggleGPS()">
+                    <label class="form-check-label ms-2" for="gpsToggle" style="font-size:0.9rem;">📍 位置・方位情報</label>
+                    <div id="gpsStatus" class="gps-status">OFF</div>
+                </div>
+                
+                <div style="flex-grow: 1;"></div>
+
+                <button class="shutter-btn-large" onclick="takeSnapshot()">
+                    <span style="font-size: 2.5rem;">📸</span> 撮影
+                </button>
+                <p class="text-center text-muted" style="font-size:0.7rem; margin-bottom:5px;">iPhoneは保存後に「画像を保存」</p>
+            </div>
+
+            <div id="tab-edit" class="tab-content">
+                <h6 class="text-center text-muted border-bottom pb-2">黒板編集</h6>
+
+                <div class="preset-box">
+                    <label>定型文 (工事名・工種)</label>
+                    <select id="presetSelect" class="form-control form-control-sm mb-1">
+                        <option value="1">定型文 1</option>
+                        <option value="2">定型文 2</option>
+                        <option value="3">定型文 3</option>
+                        <option value="4">定型文 4</option>
+                        <option value="5">定型文 5</option>
+                    </select>
+                    <div class="preset-btn-group">
+                        <button class="preset-btn btn-load" onclick="loadPreset()">📂 読込</button>
+                        <button class="preset-btn btn-save" onclick="savePreset()">💾 保存</button>
+                    </div>
+                </div>
+
+                <div><label>1. 工事名</label><input type="text" id="input1" class="form-control form-control-sm" value="R7年度 作業道開設"></div>
+                <div><label>2. 工種</label><input type="text" id="input2" class="form-control form-control-sm" value="路網作設工"></div>
+                <div><label>3. 測点</label><input type="text" id="input3" class="form-control form-control-sm" value="No.0"></div>
+                <div><label>4. 日付・備考</label><input type="text" id="input4" class="form-control form-control-sm" value=""></div>
+                
+                <div class="mt-3 text-center text-muted" style="font-size:0.8rem;">
+                    ※入力内容は「撮影」タブに戻っても保持されます
                 </div>
             </div>
 
-            <div class="form-check form-switch mt-1 border-bottom pb-2 mb-2">
-                <input class="form-check-input" type="checkbox" id="gpsToggle" onchange="toggleGPS()">
-                <label class="form-check-label" for="gpsToggle">📍 位置・方位情報を記録</label>
-                <div id="gpsStatus" class="gps-status">OFF</div>
-            </div>
-
-            <div class="preset-box">
-                <label>定型文 (工事名・工種)</label>
-                <select id="presetSelect" class="form-control form-control-sm mb-1">
-                    <option value="1">定型文 1</option>
-                    <option value="2">定型文 2</option>
-                    <option value="3">定型文 3</option>
-                    <option value="4">定型文 4</option>
-                    <option value="5">定型文 5</option>
-                </select>
-                <div class="preset-btn-group">
-                    <button class="preset-btn btn-load" onclick="loadPreset()">📂 読込</button>
-                    <button class="preset-btn btn-save" onclick="savePreset()">💾 保存</button>
-                </div>
-            </div>
-
-            <div><label>1. 工事名</label><input type="text" id="input1" class="form-control form-control-sm" value="R7年度 作業道開設"></div>
-            <div><label>2. 工種</label><input type="text" id="input2" class="form-control form-control-sm" value="路網作設工"></div>
-            <div><label>3. 測点</label><input type="text" id="input3" class="form-control form-control-sm" value="No.0"></div>
-            <div><label>4. 日付・備考</label><input type="text" id="input4" class="form-control form-control-sm" value=""></div>
-
-            <button class="shutter-btn" onclick="takeSnapshot()">📸 撮影確認</button>
-            <p class="text-center text-muted mt-1" style="font-size:0.7rem;">iPhoneは保存後に「画像を保存」</p>
         </div>
     </div>
 
 <script>
+    // --- Tab Switching Logic ---
+    function switchTab(tabName) {
+        // ボタンの見た目切り替え
+        document.getElementById('tabBtn-shoot').className = (tabName === 'shoot') ? 'tab-btn active' : 'tab-btn';
+        document.getElementById('tabBtn-edit').className = (tabName === 'edit') ? 'tab-btn active' : 'tab-btn';
+        
+        // コンテンツの表示切り替え
+        document.getElementById('tab-shoot').className = (tabName === 'shoot') ? 'tab-content active' : 'tab-content';
+        document.getElementById('tab-edit').className = (tabName === 'edit') ? 'tab-content active' : 'tab-content';
+    }
+
     // --- PWA Service Worker Registration ---
     if ('serviceWorker' in navigator) {
         window.addEventListener('load', function() {
@@ -225,16 +273,13 @@
     }
     window.onload = startCamera;
 
-    // --- Preset Logic (定型文) ---
+    // --- Preset Logic ---
     function savePreset() {
         const slot = document.getElementById('presetSelect').value;
         const val1 = document.getElementById('input1').value;
         const val2 = document.getElementById('input2').value;
-        
-        // ローカルストレージに保存
         localStorage.setItem('preset_' + slot + '_1', val1);
         localStorage.setItem('preset_' + slot + '_2', val2);
-        
         alert(`定型文${slot}に保存しました。\n① ${val1}\n② ${val2}`);
     }
 
@@ -242,10 +287,8 @@
         const slot = document.getElementById('presetSelect').value;
         const val1 = localStorage.getItem('preset_' + slot + '_1');
         const val2 = localStorage.getItem('preset_' + slot + '_2');
-
         if (val1 !== null) document.getElementById('input1').value = val1;
         if (val2 !== null) document.getElementById('input2').value = val2;
-        
         if (val1 === null) alert("保存された定型文がありません");
     }
 
@@ -319,14 +362,14 @@
         gpsStatusDiv.innerText = text || "データ取得中...";
     }
 
-    // --- Drawing Logic (Updated) ---
+    // --- Drawing Logic ---
     function drawBlackboard() {
         canvas.width = video.videoWidth;
         canvas.height = video.videoHeight;
         
         ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
 
-        // --- 1. メインの電子黒板を描画 ---
+        // 黒板設定
         const boardWidth = canvas.width * 0.25; 
         const boardHeight = boardWidth * 0.65; 
         const margin = canvas.width * 0.02;
@@ -352,37 +395,31 @@
         }
         ctx.stroke();
 
-        // 黒板文字
+        // 文字
         ctx.textAlign = "center";
         ctx.textBaseline = "middle";
         ctx.fillStyle = "white";
         
-        // 基準フォントサイズ
         const baseFontSize = Math.floor(rowH * 0.55); 
-
         const texts = [
             document.getElementById('input1').value,
             document.getElementById('input2').value,
             document.getElementById('input3').value,
             document.getElementById('input4').value
         ];
-
-        // 文字縮小処理
         const maxTextWidth = boardWidth * 0.95; 
 
         for (let i = 0; i < 4; i++) {
             let fontSize = baseFontSize;
             ctx.font = `bold ${fontSize}px Arial`;
-            
             while (ctx.measureText(texts[i]).width > maxTextWidth && fontSize > 5) {
                 fontSize--;
                 ctx.font = `bold ${fontSize}px Arial`;
             }
-
             ctx.fillText(texts[i], x + boardWidth / 2, y + (rowH * i) + (rowH / 2));
         }
 
-        // --- 2. GPS情報を下端中央に別枠で描画 ---
+        // GPS情報
         if (useGPS) {
             let line1 = "";
             let line2 = "";
