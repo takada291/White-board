@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-    <title>White-board-v1.4</title>
+    <title>White-board-v1.5</title>
     <link rel="manifest" href="manifest.json">
     <meta name="theme-color" content="#004d26">
     <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
@@ -38,37 +38,43 @@
 
         /* 右側パネル */
         .control-panel {
-            width: 320px; background: #333; padding: 15px;
+            width: 320px; background: #333; padding: 10px; /* パディングを少し調整 */
             overflow-y: auto; border-left: 1px solid #555;
-            display: flex; flex-direction: column; gap: 10px;
+            display: flex; flex-direction: column; gap: 5px; /* 隙間を詰める */
+            padding-bottom: 50px; /* 下部に余白を追加してボタンを押しやすく */
         }
 
-        /* フォーム部品 */
+        /* フォーム部品：省スペース化 */
         .form-control-sm {
             background-color: #444; color: white; border: 1px solid #666;
+            font-size: 0.9rem; /* 文字を少し小さく */
+            padding: 4px 8px; /* 内側の余白も少し詰める */
         }
         .form-control-sm:focus { background-color: #555; color: white; }
-        label { font-size: 0.8rem; color: #ccc; }
+        label { font-size: 0.75rem; color: #ccc; margin-bottom: 0; } /* ラベルもコンパクトに */
 
-        /* 撮影ボタン */
+        /* 撮影ボタン：巨大化 */
         .shutter-btn {
-            width: 100%; padding: 15px;
+            width: 100%; 
+            height: 80px; /* 高さを指定して大きく */
             background-color: #dc3545; color: white;
-            border: none; border-radius: 10px;
-            font-weight: bold; font-size: 1.2rem; 
-            margin-top: 10px;
+            border: none; border-radius: 15px;
+            font-weight: bold; font-size: 1.5rem; /* 文字も大きく */
+            margin-top: 15px;
+            box-shadow: 0 4px 8px rgba(0,0,0,0.4); /* 立体感 */
+            display: flex; align-items: center; justify-content: center;
         }
-        .shutter-btn:active { transform: scale(0.98); }
+        .shutter-btn:active { transform: scale(0.96); box-shadow: 0 2px 4px rgba(0,0,0,0.4); }
 
         /* 定型文エリア */
         .preset-box {
-            background: #444; padding: 10px; border-radius: 5px; margin-bottom: 5px;
+            background: #444; padding: 8px; border-radius: 5px; margin-bottom: 5px;
         }
         .preset-btn-group {
             display: flex; gap: 5px; margin-top: 5px;
         }
         .preset-btn {
-            flex: 1; font-size: 0.8rem; padding: 5px;
+            flex: 1; font-size: 0.8rem; padding: 8px 5px; /* ボタンを少し押しやすく */
             border: none; border-radius: 3px; cursor: pointer;
         }
         .btn-load { background: #0d6efd; color: white; }
@@ -130,7 +136,7 @@
         </div>
 
         <div class="control-panel">
-            <h6 class="text-center border-bottom pb-2">電子黒板 v1.4</h6>
+            <h6 class="text-center border-bottom pb-2">電子黒板 v1.5</h6>
 
             <div class="d-flex justify-content-between align-items-center">
                 <label>黒板位置</label>
@@ -157,7 +163,7 @@
                 </select>
                 <div class="preset-btn-group">
                     <button class="preset-btn btn-load" onclick="loadPreset()">📂 読込</button>
-                    <button class="preset-btn btn-save" onclick="savePreset()">💾 現在の内容を保存</button>
+                    <button class="preset-btn btn-save" onclick="savePreset()">💾 保存</button>
                 </div>
             </div>
 
@@ -322,7 +328,6 @@
 
         // --- 1. メインの電子黒板を描画 ---
         const boardWidth = canvas.width * 0.25; 
-        // 【修正】高さを少し低く調整 (0.75 -> 0.65)
         const boardHeight = boardWidth * 0.65; 
         const margin = canvas.width * 0.02;
 
@@ -362,14 +367,13 @@
             document.getElementById('input4').value
         ];
 
-        // 【修正】文字縮小処理
-        const maxTextWidth = boardWidth * 0.95; // 左右に少し余裕を持たせる
+        // 文字縮小処理
+        const maxTextWidth = boardWidth * 0.95; 
 
         for (let i = 0; i < 4; i++) {
             let fontSize = baseFontSize;
             ctx.font = `bold ${fontSize}px Arial`;
             
-            // 文字が枠からはみ出る場合、小さくする
             while (ctx.measureText(texts[i]).width > maxTextWidth && fontSize > 5) {
                 fontSize--;
                 ctx.font = `bold ${fontSize}px Arial`;
