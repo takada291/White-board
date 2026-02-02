@@ -1,4 +1,4 @@
-const CACHE_NAME = 'white-board-v1.9.0'; // ←バージョンを上げる時はここを変える
+const CACHE_NAME = 'white-board-v1.9.1'; // ←バージョンを上げる時はここを変える
 const urlsToCache = [
   './',
   './index.html',
@@ -47,4 +47,5 @@ self.addEventListener('message', (event) => {
     self.skipWaiting();
   }
 });
+
 
