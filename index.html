@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-    <title>White-board-v1.8</title>
+    <title>White-board-v1.9</title>
     <link rel="manifest" href="manifest.json">
     <meta name="theme-color" content="#004d26">
     <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
@@ -20,7 +20,7 @@
 
         /* 更新通知バー */
         #update-notification {
-            display: none; /* 普段は隠す */
+            display: none;
             position: fixed; top: 0; left: 0; width: 100%;
             background-color: #ff9800; color: #000;
             padding: 10px; text-align: center; z-index: 9999;
@@ -93,6 +93,25 @@
         }
         .shutter-btn-large:active { transform: scale(0.98); box-shadow: 0 3px 6px rgba(0,0,0,0.5); }
 
+        /* 【新機能】アスペクト比選択ボタン */
+        .ratio-group label {
+            font-size: 0.9rem; font-weight: bold; padding: 10px 0;
+        }
+        .btn-check:checked + .btn-outline-light {
+            background-color: #0d6efd; border-color: #0d6efd; color: white;
+        }
+        .btn-outline-light {
+            color: #ccc; border-color: #666;
+        }
+
+        /* 【改善】GPSスイッチ大型化 */
+        .form-check-input { 
+            cursor: pointer; 
+            width: 4rem; height: 2rem; /* サイズアップ */
+        }
+        .gps-status { font-size: 0.8rem; color: #ffd700; min-height: 1.2em; margin-top: 5px;}
+
+
         /* --- 記入タブ用スタイル --- */
         .form-control-sm {
             background-color: #444; color: white; border: 1px solid #666; font-size: 0.9rem; padding: 6px;
@@ -121,17 +140,14 @@
         }
         .pos-btn.active { background: #0d6efd; color: white; border-color: #0d6efd; }
 
-        .form-check-input { cursor: pointer; width: 3em; height: 1.5em; }
-        .gps-status { font-size: 0.75rem; color: #ffd700; min-height: 1.2em; margin-top: 2px;}
-
         #outputCanvas { display: none; }
 
-        /* --- プレビュー画面のスタイル (v1.7で修正) --- */
+        /* プレビュー画面（左右配置版） */
         #previewOverlay {
             display: none; 
             position: fixed; top: 0; left: 0; width: 100%; height: 100%;
             background: rgba(0,0,0,0.95); z-index: 2000;
-            flex-direction: row; /* 横並び */
+            flex-direction: row; 
             align-items: center; justify-content: center;
         }
         #previewImg {
@@ -139,7 +155,7 @@
             border: 2px solid white; margin-right: 20px;
         }
         .preview-btns { 
-            display: flex; flex-direction: column; gap: 30px; /* 縦並び・間隔広め */
+            display: flex; flex-direction: column; gap: 30px; 
         }
         .preview-action-btn {
             padding: 20px 10px; width: 120px;
@@ -185,6 +201,7 @@
 
             <div id="tab-shoot" class="tab-content active">
                 <h6 class="text-center text-muted border-bottom pb-2">撮影設定</h6>
+                
                 <div class="d-flex justify-content-between align-items-center mb-2">
                     <label style="font-size:0.9rem;">黒板位置_v1.9</label>
                     <div class="pos-switch" style="width: 60%;">
@@ -192,11 +209,27 @@
                         <div class="pos-btn active" onclick="setBoardPos('right')" id="btnRight">右下</div>
                     </div>
                 </div>
-                <div class="form-check form-switch border-bottom pb-2 mb-3">
+
+                <div class="form-check form-switch border-bottom pb-3 mb-3">
                     <input class="form-check-input" type="checkbox" id="gpsToggle" onchange="toggleGPS()">
-                    <label class="form-check-label ms-2" for="gpsToggle" style="font-size:0.9rem;">📍 位置・方位情報</label>
+                    <label class="form-check-label ms-2 mt-1" for="gpsToggle" style="font-size:1rem;">📍 位置・方位情報</label>
                     <div id="gpsStatus" class="gps-status">OFF</div>
                 </div>
+
+                <div class="mb-3">
+                    <label class="text-muted small mb-1">画角 (アスペクト比)</label>
+                    <div class="btn-group w-100 ratio-group" role="group">
+                        <input type="radio" class="btn-check" name="ratio" id="r169" autocomplete="off" checked onchange="setRatio(1.7777)">
+                        <label class="btn btn-outline-light" for="r169">16:9</label>
+
+                        <input type="radio" class="btn-check" name="ratio" id="r43" autocomplete="off" onchange="setRatio(1.3333)">
+                        <label class="btn btn-outline-light" for="r43">4:3</label>
+
+                        <input type="radio" class="btn-check" name="ratio" id="r11" autocomplete="off" onchange="setRatio(1.0)">
+                        <label class="btn btn-outline-light" for="r11">1:1</label>
+                    </div>
+                </div>
+                
                 <div style="flex-grow: 1;"></div>
                 <button class="shutter-btn-large" onclick="takeSnapshot()">
                     <span style="font-size: 2.5rem;">📸</span> 撮影
@@ -245,14 +278,11 @@
                 newWorker = reg.installing;
                 newWorker.addEventListener('statechange', () => {
                     if (newWorker.state === 'installed' && navigator.serviceWorker.controller) {
-                        // 新しいバージョンが見つかったら通知を表示
                         document.getElementById('update-notification').style.display = 'block';
                     }
                 });
             });
         });
-
-        // 更新完了後にリロード
         let refreshing;
         navigator.serviceWorker.addEventListener('controllerchange', () => {
             if (refreshing) return;
@@ -281,6 +311,12 @@
 
     const today = new Date();
     document.getElementById('input4').value = today.getFullYear() + '/' + (today.getMonth()+1) + '/' + today.getDate();
+
+    // --- Aspect Ratio Logic (画角設定) ---
+    let targetRatio = 1.7777; // 初期値 16:9
+    function setRatio(val) {
+        targetRatio = val;
+    }
 
     let boardPosition = 'right';
     function setBoardPos(pos) {
@@ -394,14 +430,41 @@
         gpsStatusDiv.innerText = text || "データ取得中...";
     }
 
-    // --- Drawing Logic ---
+    // --- Drawing Logic (Updated for Aspect Ratio) ---
     function drawBlackboard() {
-        canvas.width = video.videoWidth;
-        canvas.height = video.videoHeight;
+        // 1. 元のビデオサイズ
+        const srcW = video.videoWidth;
+        const srcH = video.videoHeight;
         
-        ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
+        // 2. 切り抜き後のサイズ計算 (Center Crop)
+        let cropW = srcW;
+        let cropH = srcH;
+        
+        // ビデオの現在のアスペクト比
+        const currentVideoRatio = srcW / srcH;
 
-        // 黒板設定
+        if (currentVideoRatio > targetRatio) {
+            // ビデオの方が横長 -> 横を削る (Pillarbox)
+            cropW = srcH * targetRatio;
+            cropH = srcH;
+        } else {
+            // ビデオの方が縦長(または正方形に近い) -> 縦を削る (Letterbox)
+            cropW = srcW;
+            cropH = srcW / targetRatio;
+        }
+
+        // 切り抜き開始位置（中央寄せ）
+        const cropX = (srcW - cropW) / 2;
+        const cropY = (srcH - cropH) / 2;
+
+        // キャンバスサイズを切り抜き後に合わせる
+        canvas.width = cropW;
+        canvas.height = cropH;
+        
+        // 切り抜いて描画
+        ctx.drawImage(video, cropX, cropY, cropW, cropH, 0, 0, cropW, cropH);
+
+        // --- 以下、黒板描画ロジック（canvasサイズ依存なので自動追従する） ---
         const boardWidth = canvas.width * 0.25; 
         const boardHeight = boardWidth * 0.65; 
         const margin = canvas.width * 0.02;
@@ -533,4 +596,3 @@
 </script>
 </body>
 </html>
-
