@@ -248,10 +248,10 @@
                 <div class="mb-3">
                     <label class="text-muted small mb-1">画角 (アスペクト比)</label>
                     <div class="btn-group w-100 ratio-group" role="group">
-                        <input type="radio" class="btn-check" name="ratio" id="r169" autocomplete="off"  onchange="setRatio(1.7777)">
+                        <input type="radio" class="btn-check" name="ratio" id="r169" autocomplete="off" checked onchange="setRatio(1.7777)">
                         <label class="btn btn-outline-light" for="r169">16:9</label>
 
-                        <input type="radio" class="btn-check" name="ratio" id="r43" autocomplete="off" checked onchange="setRatio(1.3333)">
+                        <input type="radio" class="btn-check" name="ratio" id="r43" autocomplete="off"  onchange="setRatio(1.3333)">
                         <label class="btn btn-outline-light" for="r43">4:3</label>
 
                         <input type="radio" class="btn-check" name="ratio" id="r11" autocomplete="off" onchange="setRatio(1.0)">
@@ -350,7 +350,7 @@
     document.getElementById('input4').value = today.getFullYear() + '/' + (today.getMonth()+1) + '/' + today.getDate();
 
     // --- Aspect Ratio Logic (画角設定) ---
-    let targetRatio = 1.3333; // 初期値 4:3
+    let targetRatio = 1.7777; // 初期値 16:9
     function setRatio(val) {
         targetRatio = val;
     }
@@ -643,5 +643,6 @@
 </script>
 </body>
 </html>
+
 
 
