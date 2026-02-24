@@ -232,7 +232,7 @@
                 <h6 class="text-center text-muted border-bottom pb-2">撮影設定</h6>
                 
                 <div class="d-flex justify-content-between align-items-center mb-2">
-                    <label style="font-size:0.9rem;">黒板位置_v2.0</label>
+                    <label style="font-size:0.9rem;">黒板位置_v2.1</label>
                     <div class="pos-switch" style="width: 60%;">
                         <div class="pos-btn" onclick="setBoardPos('left')" id="btnLeft">左下</div>
                         <div class="pos-btn active" onclick="setBoardPos('right')" id="btnRight">右下</div>
@@ -248,10 +248,10 @@
                 <div class="mb-3">
                     <label class="text-muted small mb-1">画角 (アスペクト比)</label>
                     <div class="btn-group w-100 ratio-group" role="group">
-                        <input type="radio" class="btn-check" name="ratio" id="r169" autocomplete="off" checked onchange="setRatio(1.7777)">
+                        <input type="radio" class="btn-check" name="ratio" id="r169" autocomplete="off"  onchange="setRatio(1.7777)">
                         <label class="btn btn-outline-light" for="r169">16:9</label>
 
-                        <input type="radio" class="btn-check" name="ratio" id="r43" autocomplete="off" onchange="setRatio(1.3333)">
+                        <input type="radio" class="btn-check" name="ratio" id="r43" autocomplete="off" checked onchange="setRatio(1.3333)">
                         <label class="btn btn-outline-light" for="r43">4:3</label>
 
                         <input type="radio" class="btn-check" name="ratio" id="r11" autocomplete="off" onchange="setRatio(1.0)">
@@ -643,3 +643,4 @@
 </script>
 </body>
 </html>
+
