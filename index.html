@@ -33,7 +33,7 @@
             border-radius: 3px;
         }
 
-        /* 簡易通知（トースト） v2.0追加 */
+        /* 簡易通知（トースト） */
         #toast {
             visibility: hidden;
             min-width: 250px;
@@ -232,7 +232,7 @@
                 <h6 class="text-center text-muted border-bottom pb-2">撮影設定</h6>
                 
                 <div class="d-flex justify-content-between align-items-center mb-2">
-                    <label style="font-size:0.9rem;">黒板位置_v2.0</label>
+                    <label style="font-size:0.9rem;">黒板位置_v2.1</label>
                     <div class="pos-switch" style="width: 60%;">
                         <div class="pos-btn" onclick="setBoardPos('left')" id="btnLeft">左下</div>
                         <div class="pos-btn active" onclick="setBoardPos('right')" id="btnRight">右下</div>
@@ -375,13 +375,12 @@
             });
             video.srcObject = stream;
         } catch (err) { 
-            // alertはフリーズ原因になるので削除またはconsoleのみに
             console.error("カメラ起動エラー: " + err.message); 
         }
     }
     window.onload = startCamera;
 
-    // --- Preset Logic (修正版: alert削除) ---
+    // --- Preset Logic ---
     function savePreset() {
         const slot = document.getElementById('presetSelect').value;
         const val1 = document.getElementById('input1').value;
@@ -389,7 +388,6 @@
         localStorage.setItem('preset_' + slot + '_1', val1);
         localStorage.setItem('preset_' + slot + '_2', val2);
         
-        // alertの代わりにToastを表示
         showToast(`定型文${slot}に保存しました`);
     }
 
@@ -431,27 +429,40 @@
                     { enableHighAccuracy: true }
                 );
             }
+            
+            // 【変更箇所】Android Chromeの「相対方位」を回避し、「絶対方位」を取得する
             if (typeof DeviceOrientationEvent !== 'undefined' && typeof DeviceOrientationEvent.requestPermission === 'function') {
+                // iOSの場合
                 try {
                     const permission = await DeviceOrientationEvent.requestPermission();
                     if (permission === 'granted') window.addEventListener('deviceorientation', handleOrientation);
                 } catch (e) {}
+            } else if ('ondeviceorientationabsolute' in window) {
+                // Android Chrome等の場合（絶対方位イベントを使用）
+                window.addEventListener('deviceorientationabsolute', handleOrientation);
             } else {
+                // その他のブラウザの場合
                 window.addEventListener('deviceorientation', handleOrientation);
             }
         } else {
             gpsStatusDiv.innerText = "OFF";
             if (watchId) navigator.geolocation.clearWatch(watchId);
             window.removeEventListener('deviceorientation', handleOrientation);
+            window.removeEventListener('deviceorientationabsolute', handleOrientation); // 追加
             currentLat = null; currentLon = null; currentHeading = null;
         }
     }
 
     function handleOrientation(event) {
         let heading = null;
+        
+        // iOSの場合
         if (event.webkitCompassHeading) {
             heading = event.webkitCompassHeading;
-        } else if (event.alpha) {
+        } 
+        // Android等の場合（alpha値から計算）
+        else if (event.alpha != null) {
+            // deviceorientationabsoluteの場合、alphaは地球の北を0度として反時計回りに増加する仕様
             heading = 360 - event.alpha; 
         }
 
@@ -462,8 +473,11 @@
             } else if (typeof window.orientation !== 'undefined') {
                 screenAngle = window.orientation;
             }
+            
+            // 横向き画面の角度を補正
             heading = (heading + screenAngle) % 360;
             if (heading < 0) heading += 360;
+            
             currentHeading = heading;
             updateStatusText();
         }
@@ -479,39 +493,27 @@
 
     // --- Drawing Logic (Updated for Aspect Ratio) ---
     function drawBlackboard() {
-        // 1. 元のビデオサイズ
         const srcW = video.videoWidth;
         const srcH = video.videoHeight;
-        
-        // 2. 切り抜き後のサイズ計算 (Center Crop)
         let cropW = srcW;
         let cropH = srcH;
-        
-        // ビデオの現在のアスペクト比
         const currentVideoRatio = srcW / srcH;
 
         if (currentVideoRatio > targetRatio) {
-            // ビデオの方が横長 -> 横を削る (Pillarbox)
             cropW = srcH * targetRatio;
             cropH = srcH;
         } else {
-            // ビデオの方が縦長(または正方形に近い) -> 縦を削る (Letterbox)
             cropW = srcW;
             cropH = srcW / targetRatio;
         }
 
-        // 切り抜き開始位置（中央寄せ）
         const cropX = (srcW - cropW) / 2;
         const cropY = (srcH - cropH) / 2;
 
-        // キャンバスサイズを切り抜き後に合わせる
         canvas.width = cropW;
         canvas.height = cropH;
-        
-        // 切り抜いて描画
         ctx.drawImage(video, cropX, cropY, cropW, cropH, 0, 0, cropW, cropH);
 
-        // --- 以下、黒板描画ロジック（canvasサイズ依存なので自動追従する） ---
         const boardWidth = canvas.width * 0.25; 
         const boardHeight = boardWidth * 0.65; 
         const margin = canvas.width * 0.02;
@@ -520,16 +522,13 @@
         y = canvas.height - boardHeight - margin;
         x = (boardPosition === 'right') ? (canvas.width - boardWidth - margin) : margin;
 
-        // 背景
         ctx.fillStyle = "#004d26"; 
         ctx.fillRect(x, y, boardWidth, boardHeight);
         
-        // 枠線
         ctx.strokeStyle = "white";
         ctx.lineWidth = boardWidth * 0.01;
         ctx.strokeRect(x, y, boardWidth, boardHeight);
 
-        // 罫線
         const rowH = boardHeight / 4;
         ctx.beginPath();
         for(let i=1; i<=3; i++) {
@@ -537,7 +536,6 @@
         }
         ctx.stroke();
 
-        // 文字
         ctx.textAlign = "center";
         ctx.textBaseline = "middle";
         ctx.fillStyle = "white";
@@ -561,7 +559,6 @@
             ctx.fillText(texts[i], x + boardWidth / 2, y + (rowH * i) + (rowH / 2));
         }
 
-        // GPS情報
         if (useGPS) {
             let line1 = "";
             let line2 = "";
