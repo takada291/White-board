@@ -77,12 +77,33 @@
         }
         video { width: 100%; height: 100%; object-fit: contain; }
 
+        /* 5.6m円 描画用オーバーレイ（New） */
+        #overlayCanvas {
+            position: absolute;
+            top: 0; left: 0;
+            width: 100%; height: 100%;
+            object-fit: contain;
+            pointer-events: none;
+            z-index: 5;
+        }
+        #circleHint {
+            display: none;
+            position: absolute;
+            top: 15px; left: 50%; transform: translateX(-50%);
+            background: rgba(0,0,0,0.8); color: #ffd700;
+            padding: 8px 20px; border-radius: 25px;
+            font-weight: bold; font-size: 1.1rem;
+            pointer-events: none; z-index: 10;
+            box-shadow: 0 4px 8px rgba(0,0,0,0.5);
+        }
+
         /* 右側パネル */
         .control-panel {
             width: 320px; background: #333; padding: 10px;
             overflow-y: hidden; 
             border-left: 1px solid #555;
             display: flex; flex-direction: column;
+            z-index: 10;
         }
 
         /* タブ切り替えボタン */
@@ -130,13 +151,12 @@
             color: #ccc; border-color: #666;
         }
 
-        /* GPS・小黒板非表示スイッチ大型化 */
+        /* 各種スイッチ大型化 */
         .form-check-input { 
             cursor: pointer; 
             width: 4rem; height: 2rem; 
         }
         .gps-status { font-size: 0.8rem; color: #ffd700; min-height: 1.2em; margin-top: 5px;}
-
 
         /* --- 記入タブ用スタイル --- */
         .form-control-sm {
@@ -168,7 +188,7 @@
 
         #outputCanvas { display: none; }
 
-        /* プレビュー画面（左右配置版） */
+        /* プレビュー画面 */
         #previewOverlay {
             display: none; 
             position: fixed; top: 0; left: 0; width: 100%; height: 100%;
@@ -217,8 +237,10 @@
     </div>
 
     <div class="app-container">
-        <div class="camera-area">
+        <div class="camera-area" id="cameraArea">
+            <div id="circleHint">2mポールの【上端】をタップ</div>
             <video id="cameraVideo" autoplay playsinline muted></video>
+            <canvas id="overlayCanvas"></canvas>
             <canvas id="outputCanvas"></canvas>
         </div>
 
@@ -229,10 +251,10 @@
             </div>
 
             <div id="tab-shoot" class="tab-content active">
-                <h6 class="text-center text-muted border-bottom pb-2">撮影設定</h6>
+                <h6 class="text-center text-muted border-bottom pb-2">撮影設定 v2.3</h6>
                 
                 <div class="d-flex justify-content-between align-items-center mb-2">
-                    <label style="font-size:0.9rem;">黒板位置_v2.2</label>
+                    <label style="font-size:0.9rem;">黒板位置</label>
                     <div class="pos-switch" style="width: 60%;">
                         <div class="pos-btn" onclick="setBoardPos('left')" id="btnLeft">左下</div>
                         <div class="pos-btn active" onclick="setBoardPos('right')" id="btnRight">右下</div>
@@ -245,10 +267,17 @@
                     <div id="gpsStatus" class="gps-status">OFF</div>
                 </div>
 
-                <div class="form-check form-switch border-bottom pb-3 mb-3">
+                <div class="form-check form-switch border-bottom pb-2 mb-2">
                     <input class="form-check-input" type="checkbox" id="noBoardToggle">
                     <label class="form-check-label ms-2 mt-1" for="noBoardToggle" style="font-size:1rem;">🚫 小黒板を非表示</label>
                     <div class="text-muted ms-2" style="font-size:0.75rem;">※自前の小黒板を使う場合（GPSは記録）</div>
+                </div>
+
+                <div class="form-check form-switch border-bottom pb-3 mb-3">
+                    <input class="form-check-input" type="checkbox" id="circleToggle" onchange="toggleCircleMode()">
+                    <label class="form-check-label ms-2 mt-1" for="circleToggle" style="font-size:1rem; color:#ffd700;">⭕ 5.6m円を描画</label>
+                    <div class="text-muted ms-2" style="font-size:0.75rem;">※画面で2mポールの上下をタップ</div>
+                    <button id="resetCircleBtn" class="btn btn-sm btn-outline-warning w-100 mt-2" style="display:none;" onclick="resetCircle()">タップをやり直す</button>
                 </div>
 
                 <div class="mb-3">
@@ -326,7 +355,6 @@
         });
     }
 
-    // --- Toast Logic (フリーズ回避用通知) ---
     function showToast(message) {
         const toast = document.getElementById("toast");
         toast.innerText = message;
@@ -334,7 +362,6 @@
         setTimeout(function(){ toast.className = toast.className.replace("show", ""); }, 2500);
     }
 
-    // --- Tab Switching Logic ---
     function switchTab(tabName) {
         document.getElementById('tabBtn-shoot').className = (tabName === 'shoot') ? 'tab-btn active' : 'tab-btn';
         document.getElementById('tabBtn-edit').className = (tabName === 'edit') ? 'tab-btn active' : 'tab-btn';
@@ -345,21 +372,20 @@
     const video = document.getElementById('cameraVideo');
     const canvas = document.getElementById('outputCanvas');
     const ctx = canvas.getContext('2d');
+    const overlayCanvas = document.getElementById('overlayCanvas');
+    const overlayCtx = overlayCanvas.getContext('2d');
     const warning = document.getElementById('portrait-warning');
     const gpsStatusDiv = document.getElementById('gpsStatus');
-    
     const previewOverlay = document.getElementById('previewOverlay');
     const previewImg = document.getElementById('previewImg');
+    
     let currentBlob = null;
-
     const today = new Date();
     document.getElementById('input4').value = today.getFullYear() + '/' + (today.getMonth()+1) + '/' + today.getDate();
 
-    // --- Aspect Ratio Logic (画角設定) ---
+    // --- Aspect Ratio Logic ---
     let targetRatio = 1.3333; // 初期値 4:3
-    function setRatio(val) {
-        targetRatio = val;
-    }
+    function setRatio(val) { targetRatio = val; }
 
     let boardPosition = 'right';
     function setBoardPos(pos) {
@@ -380,11 +406,141 @@
                 video: { facingMode: 'environment', width: { ideal: 1920 }, height: { ideal: 1080 } }, audio: false 
             });
             video.srcObject = stream;
+            video.onloadedmetadata = () => {
+                // ビデオの実際の解像度に合わせてオーバーレイを設定
+                overlayCanvas.width = video.videoWidth;
+                overlayCanvas.height = video.videoHeight;
+            };
         } catch (err) { 
             console.error("カメラ起動エラー: " + err.message); 
         }
     }
     window.onload = startCamera;
+
+    // --- 5.6m 円描画（ARポール計測）ロジック ---
+    let useCircle = false;
+    let circleTaps = [];
+
+    function toggleCircleMode() {
+        useCircle = document.getElementById('circleToggle').checked;
+        document.getElementById('circleHint').style.display = useCircle ? 'block' : 'none';
+        document.getElementById('resetCircleBtn').style.display = useCircle ? 'block' : 'none';
+        resetCircle();
+    }
+
+    function resetCircle() {
+        circleTaps = [];
+        overlayCtx.clearRect(0, 0, overlayCanvas.width, overlayCanvas.height);
+        updateCircleHint();
+    }
+
+    function updateCircleHint() {
+        if (!useCircle) return;
+        const hint = document.getElementById('circleHint');
+        if (circleTaps.length === 0) hint.innerText = "2mポールの【上端】をタップ";
+        else if (circleTaps.length === 1) hint.innerText = "2mポールの【下端】をタップ";
+        else hint.innerText = "📸 撮影できます（スマホを固定）";
+    }
+
+    document.getElementById('cameraArea').addEventListener('click', function(e) {
+        if (!useCircle || circleTaps.length >= 2) return;
+        
+        // 画面上のクリック座標をビデオのネイティブ解像度に変換
+        const rect = video.getBoundingClientRect();
+        const elemW = rect.width;
+        const elemH = rect.height;
+        const vidW = video.videoWidth;
+        const vidH = video.videoHeight;
+        const elemRatio = elemW / elemH;
+        const vidRatio = vidW / vidH;
+
+        let drawW, drawH, offsetX = 0, offsetY = 0;
+        if (elemRatio > vidRatio) {
+            drawH = elemH;
+            drawW = drawH * vidRatio;
+            offsetX = (elemW - drawW) / 2;
+        } else {
+            drawW = elemW;
+            drawH = drawW / vidRatio;
+            offsetY = (elemH - drawH) / 2;
+        }
+
+        const clickX = e.clientX - rect.left - offsetX;
+        const clickY = e.clientY - rect.top - offsetY;
+
+        // ビデオ領域内をクリックした場合のみ記録
+        if (clickX >= 0 && clickX <= drawW && clickY >= 0 && clickY <= drawH) {
+            const actualX = (clickX / drawW) * vidW;
+            const actualY = (clickY / drawH) * vidH;
+            circleTaps.push({x: actualX, y: actualY});
+            drawOverlay();
+            updateCircleHint();
+        }
+    });
+
+    function drawOverlay() {
+        overlayCtx.clearRect(0, 0, overlayCanvas.width, overlayCanvas.height);
+        drawCircleFeatures(overlayCtx, 0, 0); // オフセット無しで画面プレビューに描画
+    }
+
+    // AR描画の共通関数（プレビュー用 ＆ 最終保存用）
+    function drawCircleFeatures(context, offsetX, offsetY) {
+        if (circleTaps.length === 0) return;
+
+        context.save();
+        context.translate(offsetX, offsetY); // 最終保存時のトリミング補正用
+
+        // タップ点1
+        context.fillStyle = "red";
+        context.beginPath();
+        context.arc(circleTaps[0].x, circleTaps[0].y, 10, 0, Math.PI*2);
+        context.fill();
+
+        if (circleTaps.length > 1) {
+            // タップ点2
+            context.beginPath();
+            context.arc(circleTaps[1].x, circleTaps[1].y, 10, 0, Math.PI*2);
+            context.fill();
+
+            // 2mポールの線
+            context.beginPath();
+            context.moveTo(circleTaps[0].x, circleTaps[0].y);
+            context.lineTo(circleTaps[1].x, circleTaps[1].y);
+            context.strokeStyle = "red";
+            context.lineWidth = 5;
+            context.stroke();
+
+            // 半径計算 (2mの長さから5.6mの長さを算出 = 2.8倍)
+            const dx = circleTaps[1].x - circleTaps[0].x;
+            const dy = circleTaps[1].y - circleTaps[0].y;
+            const dist = Math.sqrt(dx*dx + dy*dy);
+            const radius = dist * 2.8; 
+
+            // 中心点は下端とする（Y座標が大きい方）
+            const centerX = circleTaps[0].y > circleTaps[1].y ? circleTaps[0].x : circleTaps[1].x;
+            const centerY = Math.max(circleTaps[0].y, circleTaps[1].y);
+
+            // 楕円描画（パースペクティブを考慮し、縦幅は横幅の約0.35倍）
+            context.beginPath();
+            context.ellipse(centerX, centerY, radius, radius * 0.35, 0, 0, 2 * Math.PI);
+            context.strokeStyle = "rgba(255, 0, 0, 0.8)";
+            context.lineWidth = 5;
+            context.stroke();
+            
+            // 半透明の赤で塗りつぶし
+            context.fillStyle = "rgba(255, 0, 0, 0.1)";
+            context.fill();
+
+            // テキスト表示
+            context.font = "bold 40px sans-serif";
+            context.fillStyle = "red";
+            context.textAlign = "left";
+            context.fillText("2mﾎﾟｰﾙ", circleTaps[0].x + 20, (circleTaps[0].y + circleTaps[1].y)/2);
+            context.fillText("半径5.6m", centerX + radius + 20, centerY);
+        }
+        context.restore();
+    }
+
 
     // --- Preset Logic ---
     function savePreset() {
@@ -393,7 +549,6 @@
         const val2 = document.getElementById('input2').value;
         localStorage.setItem('preset_' + slot + '_1', val1);
         localStorage.setItem('preset_' + slot + '_2', val2);
-        
         showToast(`定型文${slot}に保存しました`);
     }
 
@@ -401,7 +556,6 @@
         const slot = document.getElementById('presetSelect').value;
         const val1 = localStorage.getItem('preset_' + slot + '_1');
         const val2 = localStorage.getItem('preset_' + slot + '_2');
-        
         if (val1 !== null) {
             document.getElementById('input1').value = val1;
             if (val2 !== null) document.getElementById('input2').value = val2;
@@ -435,7 +589,6 @@
                     { enableHighAccuracy: true }
                 );
             }
-            
             if (typeof DeviceOrientationEvent !== 'undefined' && typeof DeviceOrientationEvent.requestPermission === 'function') {
                 try {
                     const permission = await DeviceOrientationEvent.requestPermission();
@@ -457,11 +610,9 @@
 
     function handleOrientation(event) {
         let heading = null;
-        
         if (event.webkitCompassHeading) {
             heading = event.webkitCompassHeading;
-        } 
-        else if (event.alpha != null) {
+        } else if (event.alpha != null) {
             heading = 360 - event.alpha; 
         }
 
@@ -472,10 +623,8 @@
             } else if (typeof window.orientation !== 'undefined') {
                 screenAngle = window.orientation;
             }
-            
             heading = (heading + screenAngle) % 360;
             if (heading < 0) heading += 360;
-            
             currentHeading = heading;
             updateStatusText();
         }
@@ -512,10 +661,13 @@
         canvas.height = cropH;
         ctx.drawImage(video, cropX, cropY, cropW, cropH, 0, 0, cropW, cropH);
 
-        // 【追加】小黒板非表示のチェック状態を取得
+        // 【新機能】写真にも5.6m円を描画する
+        if (useCircle && circleTaps.length === 2) {
+            drawCircleFeatures(ctx, -cropX, -cropY);
+        }
+
         const hideBoard = document.getElementById('noBoardToggle').checked;
 
-        // 小黒板が「非表示」でなければ描画する
         if (!hideBoard) {
             const boardWidth = canvas.width * 0.25; 
             const boardHeight = boardWidth * 0.65; 
@@ -563,7 +715,6 @@
             }
         }
 
-        // GPS情報は小黒板の表示/非表示に関わらず、GPSがONなら描画する
         if (useGPS) {
             let line1 = "";
             let line2 = "";
@@ -571,7 +722,6 @@
             if (currentHeading != null) line2 = `方位: ${getCardinal(currentHeading)} (${Math.round(currentHeading)}°)`;
             if (!line1 && !line2) line1 = "GPS計測中...";
 
-            // GPS枠の描画位置（小黒板が消えても常に同じ位置・下端中央）
             const margin = canvas.width * 0.02;
             const gpsFontSize = Math.floor(canvas.height * 0.03); 
             ctx.font = `bold ${gpsFontSize}px monospace`;
