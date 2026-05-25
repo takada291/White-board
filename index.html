@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-    <title>電子黒板</title>
+    <title>電子黒板 v2.5</title>
     <link rel="manifest" href="manifest.json">
     <meta name="theme-color" content="#004d26">
     <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
@@ -62,9 +62,14 @@
         /* 縦画面警告 */
         #portrait-warning {
             position: fixed; top: 0; left: 0; width: 100%; height: 100%;
-            background: rgba(0,0,0,0.9); z-index: 9999;
+            background: rgba(0,0,0,0.95); z-index: 9999;
             display: flex; justify-content: center; align-items: center;
             text-align: center; flex-direction: column;
+        }
+        .emergency-btn {
+            margin-top: 30px; padding: 10px 20px; font-size: 0.9rem;
+            background: transparent; color: #ccc; 
+            border: 1px solid #777; border-radius: 8px; cursor: pointer;
         }
 
         /* メインレイアウト */
@@ -225,7 +230,10 @@
     <div id="portrait-warning">
         <h1>📱くるっと回転</h1>
         <p>’縦向きロック’を解除してください</p>
-        <p>スマホを’横向き’にしてください</p>        
+        <p>スマホを’横向き’にしてください</p>
+        <button class="emergency-btn" onclick="this.parentElement.style.display='none'">
+            どうしても消えない場合はここをタップ
+        </button>
     </div>
 
     <div id="previewOverlay">
@@ -251,7 +259,7 @@
             </div>
 
             <div id="tab-shoot" class="tab-content active">
-                <h6 class="text-center text-muted border-bottom pb-2">撮影設定 v2.4</h6>
+                <h6 class="text-center text-muted border-bottom pb-2">撮影設定 v2.5</h6>
                 
                 <div class="d-flex justify-content-between align-items-center mb-2">
                     <label style="font-size:0.9rem;">黒板位置</label>
@@ -332,7 +340,8 @@
         if (newWorker) {
             newWorker.postMessage({ type: 'SKIP_WAITING' });
         }
-        document.getElementById('update-notification').style.display = 'none';
+        const notif = document.getElementById('update-notification');
+        if(notif) notif.style.display = 'none';
     }
 
     if ('serviceWorker' in navigator) {
@@ -341,7 +350,8 @@
                 newWorker = reg.installing;
                 newWorker.addEventListener('statechange', () => {
                     if (newWorker.state === 'installed' && navigator.serviceWorker.controller) {
-                        document.getElementById('update-notification').style.display = 'block';
+                        const notif = document.getElementById('update-notification');
+                        if(notif) notif.style.display = 'block';
                     }
                 });
             });
@@ -356,6 +366,7 @@
 
     function showToast(message) {
         const toast = document.getElementById("toast");
+        if(!toast) return;
         toast.innerText = message;
         toast.className = "show";
         setTimeout(function(){ toast.className = toast.className.replace("show", ""); }, 2500);
@@ -370,17 +381,19 @@
 
     const video = document.getElementById('cameraVideo');
     const canvas = document.getElementById('outputCanvas');
-    const ctx = canvas.getContext('2d');
+    const ctx = canvas ? canvas.getContext('2d') : null;
     const overlayCanvas = document.getElementById('overlayCanvas');
-    const overlayCtx = overlayCanvas.getContext('2d');
-    const warning = document.getElementById('portrait-warning');
+    const overlayCtx = overlayCanvas ? overlayCanvas.getContext('2d') : null;
     const gpsStatusDiv = document.getElementById('gpsStatus');
     const previewOverlay = document.getElementById('previewOverlay');
     const previewImg = document.getElementById('previewImg');
     
     let currentBlob = null;
-    const today = new Date();
-    document.getElementById('input4').value = today.getFullYear() + '/' + (today.getMonth()+1) + '/' + today.getDate();
+    const input4 = document.getElementById('input4');
+    if(input4){
+        const today = new Date();
+        input4.value = today.getFullYear() + '/' + (today.getMonth()+1) + '/' + today.getDate();
+    }
 
     // --- Aspect Ratio Logic ---
     let targetRatio = 1.3333; // 初期値 4:3
@@ -393,10 +406,20 @@
         document.getElementById('btnRight').className = pos === 'right' ? 'pos-btn active' : 'pos-btn';
     }
 
+    // --- 横画面警告ロジック（強化版） ---
     function checkOrientation() {
-        warning.style.display = (window.innerWidth < window.innerHeight) ? 'flex' : 'none';
+        const warning = document.getElementById('portrait-warning');
+        if(!warning) return;
+        
+        // CSSのメディアクエリ方式で確実に向きを判定
+        const isPortrait = window.matchMedia("(orientation: portrait)").matches;
+        warning.style.display = isPortrait ? 'flex' : 'none';
     }
     window.addEventListener('resize', checkOrientation);
+    window.addEventListener('orientationchange', () => {
+        setTimeout(checkOrientation, 100);
+        setTimeout(checkOrientation, 500); // iPhoneの回転ラグ対策
+    });
     checkOrientation();
 
     async function startCamera() {
@@ -404,11 +427,15 @@
             const stream = await navigator.mediaDevices.getUserMedia({ 
                 video: { facingMode: 'environment', width: { ideal: 1920 }, height: { ideal: 1080 } }, audio: false 
             });
-            video.srcObject = stream;
-            video.onloadedmetadata = () => {
-                overlayCanvas.width = video.videoWidth;
-                overlayCanvas.height = video.videoHeight;
-            };
+            if(video) {
+                video.srcObject = stream;
+                video.onloadedmetadata = () => {
+                    if(overlayCanvas) {
+                        overlayCanvas.width = video.videoWidth;
+                        overlayCanvas.height = video.videoHeight;
+                    }
+                };
+            }
         } catch (err) { 
             console.error("カメラ起動エラー: " + err.message); 
         }
@@ -420,67 +447,82 @@
     let circleTaps = [];
 
     function toggleCircleMode() {
-        useCircle = document.getElementById('circleToggle').checked;
-        document.getElementById('circleHint').style.display = useCircle ? 'block' : 'none';
+        const toggleElem = document.getElementById('circleToggle');
+        useCircle = toggleElem ? toggleElem.checked : false;
+        
+        const hint = document.getElementById('circleHint');
+        if(hint) hint.style.display = useCircle ? 'block' : 'none';
+        
         resetCircle();
     }
 
     function resetCircle() {
         circleTaps = [];
-        overlayCtx.clearRect(0, 0, overlayCanvas.width, overlayCanvas.height);
+        if(overlayCtx && overlayCanvas) {
+            overlayCtx.clearRect(0, 0, overlayCanvas.width, overlayCanvas.height);
+        }
         updateCircleHint();
     }
 
     function updateCircleHint() {
         if (!useCircle) return;
         const hint = document.getElementById('circleHint');
+        if (!hint) return;
+        
         if (circleTaps.length === 0) hint.innerText = "2mポールの【上端】をタップ";
         else if (circleTaps.length === 1) hint.innerText = "2mポールの【下端】をタップ";
         else hint.innerText = "📸 撮影OK (再タップでやり直し)";
     }
 
-    document.getElementById('cameraArea').addEventListener('click', function(e) {
-        if (!useCircle) return;
-        
-        // 3回目のタップでやり直し（リセット）
-        if (circleTaps.length >= 2) {
-            circleTaps = [];
-            overlayCtx.clearRect(0, 0, overlayCanvas.width, overlayCanvas.height);
-        }
-        
-        const rect = video.getBoundingClientRect();
-        const elemW = rect.width;
-        const elemH = rect.height;
-        const vidW = video.videoWidth;
-        const vidH = video.videoHeight;
-        const elemRatio = elemW / elemH;
-        const vidRatio = vidW / vidH;
+    const cameraArea = document.getElementById('cameraArea');
+    if(cameraArea) {
+        cameraArea.addEventListener('click', function(e) {
+            if (!useCircle || !video || !overlayCanvas) return;
+            
+            // 3回目のタップでやり直し（リセット）
+            if (circleTaps.length >= 2) {
+                circleTaps = [];
+                overlayCtx.clearRect(0, 0, overlayCanvas.width, overlayCanvas.height);
+            }
+            
+            const rect = video.getBoundingClientRect();
+            const elemW = rect.width;
+            const elemH = rect.height;
+            const vidW = video.videoWidth;
+            const vidH = video.videoHeight;
+            
+            if(!vidW || !vidH) return; // カメラ準備前は無視
+            
+            const elemRatio = elemW / elemH;
+            const vidRatio = vidW / vidH;
 
-        let drawW, drawH, offsetX = 0, offsetY = 0;
-        if (elemRatio > vidRatio) {
-            drawH = elemH;
-            drawW = drawH * vidRatio;
-            offsetX = (elemW - drawW) / 2;
-        } else {
-            drawW = elemW;
-            drawH = drawW / vidRatio;
-            offsetY = (elemH - drawH) / 2;
-        }
+            let drawW, drawH, offsetX = 0, offsetY = 0;
+            if (elemRatio > vidRatio) {
+                drawH = elemH;
+                drawW = drawH * vidRatio;
+                offsetX = (elemW - drawW) / 2;
+            } else {
+                drawW = elemW;
+                drawH = drawW / vidRatio;
+                offsetY = (elemH - drawH) / 2;
+            }
 
-        const clickX = e.clientX - rect.left - offsetX;
-        const clickY = e.clientY - rect.top - offsetY;
+            const clickX = e.clientX - rect.left - offsetX;
+            const clickY = e.clientY - rect.top - offsetY;
 
-        // ビデオ領域内をクリックした場合のみ記録
-        if (clickX >= 0 && clickX <= drawW && clickY >= 0 && clickY <= drawH) {
-            const actualX = (clickX / drawW) * vidW;
-            const actualY = (clickY / drawH) * vidH;
-            circleTaps.push({x: actualX, y: actualY});
-            drawOverlay();
-            updateCircleHint();
-        }
-    });
+            if (clickX >= 0 && clickX <= drawW && clickY >= 0 && clickY <= drawH) {
+                const actualX = (clickX / drawW) * vidW;
+                const actualY = (clickY / drawH) * vidH;
+                circleTaps.push({x: actualX, y: actualY});
+                drawOverlay();
+                updateCircleHint();
+            }
+        });
+    }
 
     function drawOverlay() {
+        if (!overlayCanvas || !video || !overlayCtx) return;
+        
         // iPhone特有の解像度ズレ防止処理：描画直前に必ず同期させる
         if (overlayCanvas.width !== video.videoWidth || overlayCanvas.height !== video.videoHeight) {
             overlayCanvas.width = video.videoWidth;
@@ -490,9 +532,8 @@
         drawCircleFeatures(overlayCtx, 0, 0); 
     }
 
-    // AR描画の共通関数（プレビュー用 ＆ 最終保存用）
     function drawCircleFeatures(context, offsetX, offsetY) {
-        if (circleTaps.length === 0) return;
+        if (circleTaps.length === 0 || !context) return;
 
         context.save();
         context.translate(offsetX, offsetY); 
@@ -523,22 +564,19 @@
             const dist = Math.sqrt(dx*dx + dy*dy);
             const radius = dist * 2.8; 
 
-            // 中心点は下端とする（Y座標が大きい方）
             const centerX = circleTaps[0].y > circleTaps[1].y ? circleTaps[0].x : circleTaps[1].x;
             const centerY = Math.max(circleTaps[0].y, circleTaps[1].y);
 
-            // 楕円描画（パースペクティブを考慮し、縦幅は横幅の約0.35倍）
+            // 楕円描画
             context.beginPath();
             context.ellipse(centerX, centerY, radius, radius * 0.35, 0, 0, 2 * Math.PI);
             context.strokeStyle = "rgba(255, 0, 0, 0.8)";
             context.lineWidth = 5;
             context.stroke();
             
-            // 半透明の赤で塗りつぶし
             context.fillStyle = "rgba(255, 0, 0, 0.1)";
             context.fill();
 
-            // テキスト表示
             context.font = "bold 40px sans-serif";
             context.fillStyle = "red";
             context.textAlign = "left";
@@ -552,8 +590,8 @@
     // --- Preset Logic ---
     function savePreset() {
         const slot = document.getElementById('presetSelect').value;
-        const val1 = document.getElementById('input1').value;
-        const val2 = document.getElementById('input2').value;
+        const val1 = document.getElementById('input1') ? document.getElementById('input1').value : "";
+        const val2 = document.getElementById('input2') ? document.getElementById('input2').value : "";
         localStorage.setItem('preset_' + slot + '_1', val1);
         localStorage.setItem('preset_' + slot + '_2', val2);
         showToast(`定型文${slot}に保存しました`);
@@ -561,4 +599,253 @@
 
     function loadPreset() {
         const slot = document.getElementById('presetSelect').value;
-        const val1 = localStorage.
+        const val1 = localStorage.getItem('preset_' + slot + '_1');
+        const val2 = localStorage.getItem('preset_' + slot + '_2');
+        if (val1 !== null) {
+            if(document.getElementById('input1')) document.getElementById('input1').value = val1;
+            if (val2 !== null && document.getElementById('input2')) document.getElementById('input2').value = val2;
+            showToast(`定型文${slot}を読み込みました`);
+        } else {
+            showToast("保存された定型文がありません");
+        }
+    }
+
+    // --- GPS Logic ---
+    let useGPS = false;
+    let currentLat = null;
+    let currentLon = null;
+    let currentHeading = null;
+    let watchId = null;
+
+    async function toggleGPS() {
+        const checkbox = document.getElementById('gpsToggle');
+        useGPS = checkbox ? checkbox.checked : false;
+
+        if (useGPS) {
+            if(gpsStatusDiv) gpsStatusDiv.innerText = "測位中...";
+            if (navigator.geolocation) {
+                watchId = navigator.geolocation.watchPosition(
+                    (pos) => {
+                        currentLat = pos.coords.latitude.toFixed(5);
+                        currentLon = pos.coords.longitude.toFixed(5);
+                        updateStatusText();
+                    },
+                    (err) => { if(gpsStatusDiv) gpsStatusDiv.innerText = "GPSエラー: " + err.message; },
+                    { enableHighAccuracy: true }
+                );
+            }
+            if (typeof DeviceOrientationEvent !== 'undefined' && typeof DeviceOrientationEvent.requestPermission === 'function') {
+                try {
+                    const permission = await DeviceOrientationEvent.requestPermission();
+                    if (permission === 'granted') window.addEventListener('deviceorientation', handleOrientation);
+                } catch (e) {}
+            } else if ('ondeviceorientationabsolute' in window) {
+                window.addEventListener('deviceorientationabsolute', handleOrientation);
+            } else {
+                window.addEventListener('deviceorientation', handleOrientation);
+            }
+        } else {
+            if(gpsStatusDiv) gpsStatusDiv.innerText = "OFF";
+            if (watchId) navigator.geolocation.clearWatch(watchId);
+            window.removeEventListener('deviceorientation', handleOrientation);
+            window.removeEventListener('deviceorientationabsolute', handleOrientation); 
+            currentLat = null; currentLon = null; currentHeading = null;
+        }
+    }
+
+    function handleOrientation(event) {
+        let heading = null;
+        if (event.webkitCompassHeading) {
+            heading = event.webkitCompassHeading;
+        } else if (event.alpha != null) {
+            heading = 360 - event.alpha; 
+        }
+
+        if (heading != null) {
+            let screenAngle = 0;
+            if (window.screen && window.screen.orientation && window.screen.orientation.angle) {
+                screenAngle = window.screen.orientation.angle;
+            } else if (typeof window.orientation !== 'undefined') {
+                screenAngle = window.orientation;
+            }
+            heading = (heading + screenAngle) % 360;
+            if (heading < 0) heading += 360;
+            currentHeading = heading;
+            updateStatusText();
+        }
+    }
+
+    function updateStatusText() {
+        if (!useGPS || !gpsStatusDiv) return;
+        let text = "";
+        if (currentLat) text += `N${currentLat} E${currentLon} `;
+        if (currentHeading != null) text += ` ${getCardinal(currentHeading)}`;
+        gpsStatusDiv.innerText = text || "データ取得中...";
+    }
+
+    // --- Drawing Logic ---
+    function drawBlackboard() {
+        if(!video || !canvas || !ctx) return;
+        
+        const srcW = video.videoWidth;
+        const srcH = video.videoHeight;
+        if(!srcW || !srcH) return;
+        
+        let cropW = srcW;
+        let cropH = srcH;
+        const currentVideoRatio = srcW / srcH;
+
+        if (currentVideoRatio > targetRatio) {
+            cropW = srcH * targetRatio;
+            cropH = srcH;
+        } else {
+            cropW = srcW;
+            cropH = srcW / targetRatio;
+        }
+
+        const cropX = (srcW - cropW) / 2;
+        const cropY = (srcH - cropH) / 2;
+
+        canvas.width = cropW;
+        canvas.height = cropH;
+        ctx.drawImage(video, cropX, cropY, cropW, cropH, 0, 0, cropW, cropH);
+
+        if (useCircle && circleTaps.length === 2) {
+            drawCircleFeatures(ctx, -cropX, -cropY);
+        }
+
+        const hideToggle = document.getElementById('noBoardToggle');
+        const hideBoard = hideToggle ? hideToggle.checked : false;
+
+        if (!hideBoard) {
+            const boardWidth = canvas.width * 0.25; 
+            const boardHeight = boardWidth * 0.65; 
+            const margin = canvas.width * 0.02;
+
+            let x, y;
+            y = canvas.height - boardHeight - margin;
+            x = (boardPosition === 'right') ? (canvas.width - boardWidth - margin) : margin;
+
+            ctx.fillStyle = "#004d26"; 
+            ctx.fillRect(x, y, boardWidth, boardHeight);
+            
+            ctx.strokeStyle = "white";
+            ctx.lineWidth = boardWidth * 0.01;
+            ctx.strokeRect(x, y, boardWidth, boardHeight);
+
+            const rowH = boardHeight / 4;
+            ctx.beginPath();
+            for(let i=1; i<=3; i++) {
+                ctx.moveTo(x, y + rowH * i); ctx.lineTo(x + boardWidth, y + rowH * i);
+            }
+            ctx.stroke();
+
+            ctx.textAlign = "center";
+            ctx.textBaseline = "middle";
+            ctx.fillStyle = "white";
+            
+            const baseFontSize = Math.floor(rowH * 0.55); 
+            const texts = [
+                document.getElementById('input1') ? document.getElementById('input1').value : "",
+                document.getElementById('input2') ? document.getElementById('input2').value : "",
+                document.getElementById('input3') ? document.getElementById('input3').value : "",
+                document.getElementById('input4') ? document.getElementById('input4').value : ""
+            ];
+            const maxTextWidth = boardWidth * 0.95; 
+
+            for (let i = 0; i < 4; i++) {
+                let fontSize = baseFontSize;
+                ctx.font = `bold ${fontSize}px Arial`;
+                while (ctx.measureText(texts[i]).width > maxTextWidth && fontSize > 5) {
+                    fontSize--;
+                    ctx.font = `bold ${fontSize}px Arial`;
+                }
+                ctx.fillText(texts[i], x + boardWidth / 2, y + (rowH * i) + (rowH / 2));
+            }
+        }
+
+        if (useGPS) {
+            let line1 = "";
+            let line2 = "";
+            if (currentLat) line1 = `N${currentLat} E${currentLon}`;
+            if (currentHeading != null) line2 = `方位: ${getCardinal(currentHeading)} (${Math.round(currentHeading)}°)`;
+            if (!line1 && !line2) line1 = "GPS計測中...";
+
+            const margin = canvas.width * 0.02;
+            const gpsFontSize = Math.floor(canvas.height * 0.03); 
+            ctx.font = `bold ${gpsFontSize}px monospace`;
+
+            const padding = gpsFontSize * 0.5;
+            const textWidth1 = ctx.measureText(line1).width;
+            const textWidth2 = ctx.measureText(line2).width;
+            const maxGPSWidth = Math.max(textWidth1, textWidth2);
+            
+            const gpsBoxWidth = maxGPSWidth + (padding * 4);
+            const lineHeight = gpsFontSize * 1.2;
+            const gpsBoxHeight = (line2 ? lineHeight * 2 : lineHeight) + (padding * 2);
+
+            const gpsX = (canvas.width - gpsBoxWidth) / 2;
+            const gpsY = canvas.height - gpsBoxHeight - margin;
+
+            ctx.fillStyle = "rgba(0, 51, 25, 0.85)"; 
+            ctx.fillRect(gpsX, gpsY, gpsBoxWidth, gpsBoxHeight);
+
+            ctx.fillStyle = "#ffff00"; 
+            ctx.textAlign = "center";
+            ctx.textBaseline = "middle";
+            
+            if (line2) {
+                ctx.fillText(line1, canvas.width / 2, gpsY + padding + lineHeight/2);
+                ctx.fillText(line2, canvas.width / 2, gpsY + padding + lineHeight*1.5);
+            } else {
+                ctx.fillText(line1, canvas.width / 2, gpsY + gpsBoxHeight/2);
+            }
+        }
+    }
+
+    function getCardinal(angle) {
+        const directions = ['N↑', 'NE↗', 'E→', 'SE↘', 'S↓', 'SW↙', 'W←', 'NW↖'];
+        return directions[Math.round(((angle %= 360) < 0 ? angle + 360 : angle) / 45) % 8];
+    }
+
+    function takeSnapshot() {
+        drawBlackboard();
+        if(!canvas) return;
+        canvas.toBlob((blob) => {
+            if (!blob) return;
+            currentBlob = blob;
+            if(previewImg && previewOverlay) {
+                previewImg.src = URL.createObjectURL(blob);
+                previewOverlay.style.display = 'flex';
+            }
+        }, 'image/jpeg', 0.95);
+    }
+
+    function cancelPreview() {
+        if(previewOverlay) previewOverlay.style.display = 'none';
+        if(previewImg) URL.revokeObjectURL(previewImg.src);
+        currentBlob = null;
+    }
+
+    async function savePhoto() {
+        if (!currentBlob) return;
+        const now = new Date();
+        const fileName = `kokuban_${now.getTime()}.jpg`;
+        const file = new File([currentBlob], fileName, { type: "image/jpeg" });
+
+        if (navigator.share && navigator.canShare && navigator.canShare({ files: [file] })) {
+            try {
+                await navigator.share({ files: [file], title: '黒板写真' });
+                cancelPreview();
+                return;
+            } catch (err) {}
+        }
+        const link = document.createElement('a');
+        link.download = fileName;
+        link.href = URL.createObjectURL(currentBlob);
+        link.click();
+        cancelPreview();
+    }
+</script>
+</body>
+</html>
